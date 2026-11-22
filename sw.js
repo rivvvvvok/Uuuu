@@ -1,14 +1,14 @@
 /* sw.js - unicos service worker
-   1) 离线缓存：先联网取最新文件，取不到（没网）再用缓存，所以更新不会被旧缓存卡住
+   1) 离线缓存：先联网取最新文件（每次向服务器确认是否有更新），取不到（没网）再用缓存
    2) 通知：页面通过 registration.showNotification 弹通知，点通知会回到 App
-   以后拆成多个文件时，把新文件名加进 PRECACHE 就行 */
-var CACHE = "unicos-v1";
-var PRECACHE = ["./", "index.html", "manifest.json", "icon.png"];
+   新增文件时，把文件名加进下面的 PRECACHE 就行 */
+var CACHE = "unicos-v2";
+var PRECACHE = ["./", "index.html", "style.css", "base.js", "people.js", "settings.js", "chat.js", "spaces.js", "library.js", "system.js", "chat-extras.js", "char.js", "manifest.json", "icon.png"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(
     caches.open(CACHE).then(function (c) {
-      return Promise.all(PRECACHE.map(function (u) { return c.add(u).catch(function () {}); }));
+      return Promise.all(PRECACHE.map(function (u) { return c.add(new Request(u, { cache: "reload" })).catch(function () {}); }));
     }).then(function () { return self.skipWaiting(); })
   );
 });
@@ -27,7 +27,7 @@ self.addEventListener("fetch", function (e) {
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // 表情包外链、AI 接口等一律不管
   e.respondWith(
-    fetch(req).then(function (res) {
+    fetch(req, { cache: "no-cache" }).then(function (res) {
       if (res && res.ok) {
         var copy = res.clone();
         caches.open(CACHE).then(function (c) { c.put(req, copy); }).catch(function () {});
