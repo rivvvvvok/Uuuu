@@ -101,7 +101,11 @@ function applyChatBg(){
 }
 
 function fitChatTop(){var h=$("#chHead"),sc=$("#chScroll");if(h&&sc&&h.offsetHeight)sc.style.paddingTop=(h.offsetHeight+14)+"px"}
-(function(){var _rc=renderChat;renderChat=function(k){var r=_rc(k);fitChatTop();return r}})();
+var stickBottom=true;
+function toBottom(){var sc=$("#chScroll");if(sc)sc.scrollTop=sc.scrollHeight}
+(function(){var _rc=renderChat;renderChat=function(k){var r=_rc(k);fitChatTop();if(!k){stickBottom=true;toBottom();requestAnimationFrame(toBottom);[120,400,1000].forEach(function(ms){setTimeout(function(){if(stickBottom)toBottom()},ms)})}return r}})();
+$("#chScroll").addEventListener("scroll",function(){stickBottom=(this.scrollHeight-this.scrollTop-this.clientHeight)<120},{passive:true});
+$("#chScroll").addEventListener("load",function(e){if(e.target.tagName==="IMG"&&stickBottom)toBottom()},true);
 window.addEventListener("resize",fitChatTop);
 
 function heroCard(o){
@@ -485,7 +489,7 @@ $("#sheet").addEventListener("click",function(e){
 // 拉黑期间收到的消息：点黑色感叹号看说明
 var BLKX='<i class="blkx"><svg viewBox="0 0 24 24"><path d="M12 6v8"/><path d="M12 18.500v.1"/></svg></i>';
 $("#chScroll").addEventListener("click",function(e){
-  if(e.target.closest(".blkx")){e.stopPropagation();toast("你已拉黑对方，这条消息是在拉黑期间收到的",3200)}
+  if(e.target.closest(".blkx")){e.stopPropagation();toast("You blocked this Char. This message arrived while blocked.",3200)}
 },true);
 
 
@@ -512,13 +516,13 @@ function agoLabel(t){var d=(Date.now()-t)/1000;if(d<45)return "Just now";if(d<36
 function closeThought(){$("#thWrap").hidden=true}
 function openThought(){
   var c=cget(CUR),o=chsGet(CUR),t=THT[CUR],h;
-  var head='<button class="thw-x" id="thX" aria-label="关闭">'+XSVG+'</button><div class="thw-av">'+avh(c.avatar)+'</div><div class="thw-name">'+esc(nick(c))+'</div><div class="thw-sub">Current Thoughts</div>';
+  var head='<div class="thw-av">'+avh(c.avatar)+'</div><div class="thw-name">'+esc(nick(c))+'</div><div class="thw-sub">Current Thoughts</div>';
   if(t&&t.text){
     t.seen=true;saveTHT();heartDot();
-    h=head+'<div class="thw-q">“'+esc(t.text)+'”</div><div class="thw-time">'+agoLabel(t.t)+'</div><div class="thw-line"></div>'+
+    h=head+'<div class="thw-q">'+esc(t.text)+'</div><div class="thw-time">'+agoLabel(t.t)+'</div><div class="thw-line"></div>'+
       '<div class="thw-act"><button class="thw-col'+(t.saved?' done':'')+'" id="thSave"'+(t.saved?' disabled':'')+'>'+BKM+'<span>'+(t.saved?'Collected':'Collect')+'</span></button><button class="thw-close" id="thClose">Close</button></div>';
   }else{
-    h=head+'<div class="thw-q" style="font-size:14px;font-weight:700;color:var(--sub)">'+(o.thoughts?'还没有心声<br>让 '+esc(nick(c))+' 回复一轮，这里就会出现 Ta 此刻的心声':'心声还没开启<br>到 Chat Settings 里打开 Inner thoughts each round，再让 Char 回复一轮')+'</div><div class="thw-line"></div>'+
+    h=head+'<div class="thw-q" style="font-size:14px;font-weight:700;color:var(--sub)">'+(o.thoughts?'No thoughts yet<br>Let '+esc(nick(c))+' reply once and their current thought will show up here':'Inner thoughts are off<br>Turn on “Inner thoughts each round” in Chat Settings, then let Char reply once')+'</div><div class="thw-line"></div>'+
       '<div class="thw-act"><button class="thw-close" id="thClose" style="flex:1">Close</button></div>';
   }
   $("#thCard").innerHTML=h;$("#thWrap").hidden=false;
