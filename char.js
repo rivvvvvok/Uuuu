@@ -270,7 +270,7 @@ function chsPrompt(id){
 var sumBusy={};
 function summarize(cid,manual){
   var o=chsGet(cid),c=cget(cid),list=msgs(cid),a=S.api;
-  var seg=list.slice(Math.min(o.ltmAt||0,list.length));
+  var s0=Math.min(o.ltmAt||0,list.length),e0=list.length,seg=list.slice(s0);
   if(!c||seg.length<2){if(manual)toast("还没有新的聊天可以总结");return Promise.resolve(false)}
   if(sumBusy[cid])return Promise.resolve(false);
   var cap=Math.max(1,parseInt(o.ltmCap)||500),demo=(a.base||"").trim().toLowerCase()==="demo";
@@ -288,8 +288,8 @@ function summarize(cid,manual){
     if(!t)throw new Error("空回复");
     var lt=(seg[seg.length-1]||{}).t||Date.now();
     if(MT.indexOf("Summary")<0)MT.push("Summary");
-    (MEM[cid]||(MEM[cid]=[])).unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:"Summary",text:t,t:Date.now(),date:memDay(lt),time:memTm(lt)});
-    saveMem();o.ltmAt=list.length;saveCHS();
+    (MEM[cid]||(MEM[cid]=[])).unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:"Summary",text:t,t:Date.now(),date:memDay(lt),time:memTm(lt),sf:s0,st:e0});
+    saveMem();o.ltmAt=e0;saveCHS();
     if(manual)toast("已生成并存入 Memory");
     return true;
   }).catch(function(e){if(manual)toast("总结失败："+String(e.message||e).slice(0,60));return false})
@@ -341,7 +341,7 @@ function renderChSet(){
     '<div class="sgrp">Output</div><div class="card"><div class="fl"><label>Messages per round</label><div class="rng"><input data-cf="outMin" type="number" inputmode="numeric" placeholder="min" value="'+o.outMin+'"><span>to</span><input data-cf="outMax" type="number" inputmode="numeric" placeholder="max" value="'+o.outMax+'"></div></div>'+
       chSeg("emoFreq","Sticker frequency","只控制表情标签，不限制普通消息里的 emoji")+chSeg("voiceFreq","Voice frequency","需要先开启上面的 Voice generation")+chI("mem","Short-term memory (messages)","150",{num:1,sub:"Char 每次回复时能读到的最近聊天条数，默认 150"})+chT("thoughts","Inner thoughts each round","开启后，Char 每轮回复都会带一条心声，点聊天栏里的爱心查看。一轮刷一轮，想留下就收藏")+'</div>'+
     '<div class="sgrp">World Book</div><div class="card">'+(wb||'<div class="empty" style="margin:6px 0">还没有世界书条目</div>')+'</div><div class="hint">开关表示这条设定是否挂载给这位 Char。Local 条目会加入或移出它的角色列表</div>'+
-    '<div class="sgrp">Long-term Memory</div><div class="card">'+chT("ltm","Long-term memory","开启后，聊天累计到设定条数会自动总结成核心记忆，存进 Memory 页")+chI("ltmEvery","Trigger every (messages)","90",{num:1,sub:"每累计这么多条新消息，就总结一次，默认 90"})+chI("ltmCap","Core memory limit (characters)","500",{num:1,sub:"每次总结的字数上限，默认 500"})+'<div class="fl"><div class="srow"><b>Not summarized yet</b><span class="v">'+Math.max(0,total-Math.min(o.ltmAt||0,total))+' messages</span></div><button class="pillbtn" data-ca="sumnow" style="margin-top:12px">Summarize now</button><div class="hint">手动总结自上次总结以来的新聊天，随时可以点</div></div></div>'+
+    '<div class="sgrp">Long-term Memory</div><div class="card">'+chT("ltm","Long-term memory","开启后，聊天累计到设定条数会自动总结成核心记忆，存进 Memory 页")+chI("ltmEvery","Trigger every (messages)","90",{num:1,sub:"每累计这么多条新消息，就总结一次，默认 90"})+chI("ltmCap","Core memory limit (characters)","500",{num:1,sub:"每次总结的字数上限，默认 500"})+'<div class="fl"><div class="srow"><b>Not summarized yet</b><span class="v">'+Math.max(0,total-Math.min(o.ltmAt||0,total))+' messages</span></div><button class="pillbtn" data-ca="sumnow" style="margin-top:12px">Summarize now</button><button class="pillbtn" data-ca="sumredo" style="margin-top:8px">Re-summarize last '+(Math.max(1,parseInt(o.ltmEvery)||90))+' messages</button><div class="hint">手动总结自上次总结以来的新聊天。删掉最新一条总结时进度会自动回退；也可以点第二个按钮，把最近这么多条重新标成未总结，再点 Summarize now</div></div></div>'+
     '<div class="sgrp">Chat Background</div><div class="card"><div class="fl"><button class="tile wide" data-ca="bgpick" style="width:100%">'+I.photo+'<span class="tx"><b>Choose image</b><small>'+(o.chBg?"已设置":"未设置，使用默认背景")+'</small></span></button>'+(o.chBg?'<button class="pillbtn" data-ca="bgrm" style="margin-top:10px">Remove background</button>':'')+'</div></div>'+
     '<div class="sgrp">Manage</div><button class="pillbtn" data-ca="edit">Edit Contact</button><button class="pillbtn" data-ca="clear">Clear Chat</button><div class="card" style="margin-top:12px">'+chT("blocked","Block","拉黑后你无法给 Char 发消息；Char 仍能给你发消息，但每条旁边会带一个黑色感叹号")+'</div></div>';
 }
@@ -359,6 +359,7 @@ $("#pgChset").onclick=function(e){
     else{x.chars=x.chars||[];var jx=x.chars.indexOf(CUR);if(jx>-1)x.chars.splice(jx,1);else x.chars.push(CUR);on=x.chars.indexOf(CUR)>-1;saveWB()}
     b.querySelector(".sw").classList.toggle("on",on);return;
   }
+  if(b.dataset.ca==="sumredo"){var oo=chsGet(CUR),nn=Math.max(1,parseInt(oo.ltmEvery)||90);oo.ltmAt=Math.max(0,msgs(CUR).length-nn);saveCHS();toast("已回退，可以重新总结");renderChSet();return}
   if(b.dataset.ca==="sumnow"){b.disabled=true;b.textContent="Summarizing…";summarize(CUR,true).then(function(){if(!$("#pgChset").hidden)renderChSet()});return}
   if(b.dataset.ca==="bgpick"){
     var bi=document.createElement("input");bi.type="file";bi.accept="image/*";

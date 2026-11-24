@@ -356,7 +356,10 @@ $("#sheet").addEventListener("click",function(e){
   if(t.id==="mmCancel")closeSheet();
   else if(t.id==="mmDel"){
     if(!t.dataset.arm){t.dataset.arm="1";t.textContent="再点一次确认删除";t.style.color="#e5484d";return}
-    MEM[MV.cid]=(MEM[MV.cid]||[]).filter(function(m){return m.id!==ME.id});saveMem();closeSheet();renderMem();toast("已删除");
+    var dm=null,rb=false;(MEM[MV.cid]||[]).forEach(function(m){if(m.id===ME.id)dm=m});
+    // 删的是最新一条自动总结：把总结进度退回到它开始的位置，这段聊天就能重新总结
+    if(dm&&dm.type==="Summary"&&typeof dm.sf==="number"&&typeof chsGet==="function"){var co=chsGet(MV.cid);if((co.ltmAt||0)===dm.st){co.ltmAt=dm.sf;saveCHS();rb=true}}
+    MEM[MV.cid]=(MEM[MV.cid]||[]).filter(function(m){return m.id!==ME.id});saveMem();closeSheet();renderMem();toast(rb?"已删除，这段聊天可以重新总结":"已删除");
   }
   else if(t.id==="mmSave"){
     var tx=$("#mmText").value.trim(),nt=$("#mmNew").value.trim(),ty=ME.type,dv=$("#mmDate").value||memDay(Date.now()),tv=$("#mmTime").value||memTm(Date.now());
