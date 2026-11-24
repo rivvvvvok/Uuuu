@@ -276,15 +276,34 @@ function summarize(cid,manual){
   var cap=Math.max(1,parseInt(o.ltmCap)||500),demo=(a.base||"").trim().toLowerCase()==="demo";
   if(!demo&&(!a.base||!a.key||!a.model)){if(manual)toast("请先在 Settings 填写 Chat API");return Promise.resolve(false)}
   sumBusy[cid]=1;
-  var convo=seg.filter(function(m){return m.by!=="sys"}).map(function(m){return(m.t?"["+memDay(m.t)+" "+memTm(m.t)+"] ":"")+(m.by==="me"?P.name:nick(c))+": "+m.text}).join("\n");
-  var job=demo?new Promise(function(r){setTimeout(function(){r("（演示）这里会是 "+seg.length+" 条聊天的核心记忆总结。")},800)}):
-    fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.3,max_tokens:Math.min(16000,cap*3),messages:[
-      {role:"system",content:PROMPTS.summary(nick(c),P.name,cap,PROMPTS.limits.summaryLang)},
-      {role:"user",content:convo}]})})
+  // 聊天记录不再每行带时间：只在「新的一段」开头标一次（隔得久或跨天算新的一段）
+  var gap=(PROMPTS.limits.summaryGapMin||60)*60000,prev=0,lines=[];
+  seg.forEach(function(m){
+    if(m.by==="sys")return;
+    if(m.t&&(!prev||m.t-prev>gap||memDay(m.t)!==memDay(prev)))lines.push("=== "+memDay(m.t)+" "+memTm(m.t)+" ===");
+    if(m.t)prev=m.t;
+    lines.push((m.by==="me"?P.name:nick(c))+": "+m.text);
+  });
+  var convo=lines.join("\n"),tok=Math.min(16000,cap*3),lang=PROMPTS.limits.summaryLang;
+  function ask(sys,user){
+    return fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.3,max_tokens:tok,messages:[{role:"system",content:sys},{role:"user",content:user}]})})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
-    .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("空回复");return String(t)});
+    .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("空回复");return String(t).replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").trim()});
+  }
+  // 超出字数上限：让 AI 压缩（最多两次），实在不行才在句子结尾处截断，不会断在半句话中间
+  function fit(t,n){
+    if(t.length<=cap||n>=2)return Promise.resolve(t);
+    return ask(PROMPTS.condense(cap,lang),t).then(function(t2){return fit(t2||t,n+1)});
+  }
+  function cutFit(t){
+    if(t.length<=cap)return t;
+    var s=t.slice(0,cap),k=Math.max(s.lastIndexOf("。"),s.lastIndexOf("！"),s.lastIndexOf("？"),s.lastIndexOf("；"),s.lastIndexOf("\n"),s.lastIndexOf("."));
+    return(k>cap*0.5?s.slice(0,k+1):s).trim();
+  }
+  var job=demo?new Promise(function(r){setTimeout(function(){r("（演示）这里会是 "+seg.length+" 条聊天的核心记忆总结。")},800)}):
+    ask(PROMPTS.summary(nick(c),P.name,cap,lang),convo).then(function(t){return fit(t,0)});
   return job.then(function(t){
-    t=t.replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").trim().slice(0,cap);
+    t=cutFit(t);
     if(!t)throw new Error("空回复");
     var lt=(seg[seg.length-1]||{}).t||Date.now();
     if(MT.indexOf("Summary")<0)MT.push("Summary");
