@@ -169,6 +169,7 @@ function getReply(){
     var parts=text.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);
     var hasX=msgs(id).some(function(m){return m.by==="me"&&m.type==="transfer"&&!m.st}),dec=null,rb="b"+Date.now().toString(36);
     if(hasX)parts=parts.map(function(x){var mm=x.match(/\[(accept|return)\]/i);if(mm){dec=mm[1].toLowerCase();x=x.replace(/\s*\[(accept|return)\]\s*/ig," ").trim()}return x}).filter(Boolean);
+    var capN=Math.max(1,chsGet(id).outMin,chsGet(id).outMax);if(parts.length>capN)parts=parts.slice(0,capN); // 保险：AI 超过上限时，多出来的不发
     parts=parts.length?parts:["…"];var trs=[];
     parts=parts.map(function(x,i){var k=x.split(/\s*(?:\|\|\||｜｜｜)\s*/);if(k.length>1){trs[i]=k.slice(1).join(" ").trim();return k[0].trim()||"…"}return x});
     PTR[id]=trs;RB[id]=rb;if(hasX)applyXfer(id,dec||"accept",rb);reveal(id,parts,0);

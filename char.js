@@ -240,7 +240,7 @@ function phSheet(k){
 // ---------- Chat Settings (per Char) ----------
 // getChatSettings(id): 供内置功能读取这位 Char 的聊天设置
 var CHS={};try{CHS=JSON.parse(store("chatset")||"{}")}catch(e){}
-var CHD={mem:150,bg:false,bgMin:30,life:false,charTz:"",userTz:"",charRegion:"",userRegion:"",voice:false,voiceId:"",charLang:"",trLang:"",trOpen:false,aware:false,outMin:1,outMax:5,thoughts:false,wbOff:[],blocked:false,vtMe:true,vtChar:true,chBg:"",cot:false,busyOn:false,arMode:"busy",ar:{busy:["","",""],focus:["","",""],sleep:["","",""]},emoFreq:"mid",voiceFreq:"low",ltm:false,ltmEvery:90,ltmCap:500,ltmAt:0};
+var CHD={mem:150,bg:false,bgMin:30,apOn:false,apMin:180,apAt:0,asOn:false,asMin:60,asAt:0,life:false,charTz:"",userTz:"",charRegion:"",userRegion:"",voice:false,voiceId:"",charLang:"",trLang:"",trOpen:false,aware:false,outMin:1,outMax:5,thoughts:false,wbOff:[],blocked:false,vtMe:true,vtChar:true,chBg:"",cot:false,busyOn:false,arMode:"busy",ar:{busy:["","",""],focus:["","",""],sleep:["","",""]},emoFreq:"mid",voiceFreq:"low",ltm:false,ltmEvery:90,ltmCap:500,ltmAt:0};
 function chsGet(id){var o=CHS[id]||(CHS[id]={});for(var k in CHD)if(o[k]===undefined)o[k]=(typeof CHD[k]==="object")?JSON.parse(JSON.stringify(CHD[k])):CHD[k];return o}
 function saveCHS(){try{localStorage.setItem("chatset",JSON.stringify(CHS));return true}catch(e){toast("存储空间不足");return false}}
 window.getChatSettings=function(id){return JSON.parse(JSON.stringify(chsGet(id)))};
@@ -264,7 +264,7 @@ function chsPrompt(id){
     if(trl.items.length)r.push(PROMPTS.lifeTrail(trl));
   }
   var a=Math.min(o.outMin,o.outMax),b=Math.max(o.outMin,o.outMax);
-  r.push(PROMPTS.outputRhythm(a,b));
+  r.push(PROMPTS.outputRhythm(a,b,PROMPTS.pickCount(a,b)));
   return r;
 }
 var sumBusy={};
@@ -348,6 +348,8 @@ function renderChSet(){
     '<div class="hint" style="margin:12px 4px 0">'+esc(nick(c))+' 的聊天设置，只对这位 Char 生效</div>'+
     '<div class="sgrp">Overview</div><div class="card"><div class="fl"><div class="srow"><b>Total messages</b><span class="v">'+total+'</span></div></div><div class="fl"><div class="srow"><b>Estimated tokens (this round)</b><span class="v">≈ '+estRound(c)+'</span></div><div class="hint">按当前设定的记忆深度估算：系统提示词 + 最近聊天记录，只含输入部分</div></div></div>'+
     '<div class="sgrp">Background Chat</div><div class="card">'+chT("bg","Message you on their own","开启后，Char 会在后台主动私发消息")+chI("bgMin","Interval (minutes)","30",{num:1})+'</div>'+
+    '<div class="sgrp">Auto Post</div><div class="card">'+chT("apOn","Post moments on their own","开启后，Char 隔一段时间会根据当前状态自己发一条动态：一两句话，像真人随手发的")+chI("apMin","Interval (minutes)","180",{num:1,sub:"只有 App 开着时才会计时；很久没打开的话，下次打开会补发一条"})+'</div>'+
+    '<div class="sgrp">Auto Status</div><div class="card">'+chT("asOn","Set status on their own","开启后，Char 隔一段时间会自己更新一条限时状态：几个字，24 小时后消失")+chI("asMin","Interval (minutes)","60",{num:1})+'</div>'+
     '<div class="sgrp">Life Trail</div><div class="card">'+chT("life","Life trail status","让 Char 拥有自己的生活轨迹和当前状态")+'</div>'+
     '<div class="sgrp">Time & Place</div><datalist id="tzList">'+tzs.map(function(z){return '<option value="'+z+'">'}).join("")+'</datalist><div class="card">'+
       chI("charTz","Char time zone","例如 Asia/Tokyo",{list:"tzList",tz:1})+chI("userTz","Your time zone","例如 America/New_York",{list:"tzList",tz:1})+
@@ -370,7 +372,7 @@ $("#pgChset").onclick=function(e){
   if(b.id==="chsBack"){go("chat");applyChatBg();renderChat(true);updateSend();return}
   if(b.dataset.sg){var pk=b.parentNode.dataset.sgk;o[pk]=b.dataset.sg;[].forEach.call(b.parentNode.children,function(x){x.classList.toggle("on",x===b)});saveCHS();return}
   if(b.dataset.bm){o.arMode=b.dataset.bm;saveCHS();$("#arBox").innerHTML=arHTML();return}
-  if(b.dataset.ct){var k=b.dataset.ct;o[k]=!o[k];b.querySelector(".sw").classList.toggle("on",o[k]);saveCHS();if(k==="blocked"){var bc=cget(CUR),bn=bc?nick(bc):"Char";sysNote(CUR,o[k]?"You blocked "+bn:"You unblocked "+bn);toast(o[k]?"Blocked":"Unblocked")}return}
+  if(b.dataset.ct){var k=b.dataset.ct;o[k]=!o[k];if((k==="apOn"||k==="asOn")&&o[k])o[k==="apOn"?"apAt":"asAt"]=Date.now();b.querySelector(".sw").classList.toggle("on",o[k]);saveCHS();if(k==="blocked"){var bc=cget(CUR),bn=bc?nick(bc):"Char";sysNote(CUR,o[k]?"You blocked "+bn:"You unblocked "+bn);toast(o[k]?"Blocked":"Unblocked")}return}
   if(b.dataset.wb){
     var id=b.dataset.wb,x=null;WB.items.forEach(function(i){if(i.id===id)x=i});if(!x)return;
     var on;
@@ -398,7 +400,7 @@ $("#pgChset").oninput=function(e){
   var o=chsGet(CUR),v=e.target.value;
   if(f==="charTz"||f==="userTz"){o[f]=v.trim();var n=$("#tzn_"+f);if(n)n.textContent=tzOk(o[f]||undefined)?tzNow(o[f]):"";saveCHS();return}
   if(e.target.type==="number"){var n2=parseInt(v,10);if(isNaN(n2))return;
-    var lim={ltmEvery:[10,1000],ltmCap:[50,3000],mem:[2,1000],bgMin:[1,1440],outMin:[1,20],outMax:[1,20]}[f]||[1,9999];
+    var lim={ltmEvery:[10,1000],ltmCap:[50,3000],mem:[2,1000],bgMin:[1,1440],apMin:[1,10080],asMin:[1,10080],outMin:[1,20],outMax:[1,20]}[f]||[1,9999];
     o[f]=Math.max(lim[0],Math.min(lim[1],n2));saveCHS();return}
   o[f]=v.trim();saveCHS();
 };
@@ -441,3 +443,58 @@ $("#pgChset").onchange=function(e){
   if(app)new MutationObserver(function(){requestAnimationFrame(apply)}).observe(app,{childList:true,subtree:true});
   apply();
 })();
+
+
+// ---------- Char 自己发动态 / 状态 ----------
+// 每位 Char 在 Chat Settings 里分别开关、分别设间隔（分钟）。只有 App 开着时才会计时，打开后发现到点了就补发一条。
+var AUTO={busy:false};
+function autoApiOk(){var a=S.api;return (a.base||"").trim().toLowerCase()==="demo"||!!(a.base&&a.key&&a.model)}
+function autoClean(t,cut){
+  t=String(t||"").replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").replace(/\[thought:[\s\S]*?\]/ig,"");
+  t=t.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean)[0]||"";
+  t=t.split(/\s*(?:\|\|\||｜｜｜)\s*/)[0].trim().replace(/^["“「『]+|["”」』]+$/g,"").trim();
+  return t.slice(0,cut);
+}
+function autoRun(c,kind){
+  var o=chsGet(c.id),L=PROMPTS.limits,a=S.api,demo=(a.base||"").trim().toLowerCase()==="demo";
+  var lang=o.charLang||"the language this character normally uses",sys="",ask,cut;
+  try{sys=buildSystem(c,msgs(c.id).slice(-8))}catch(e){}
+  if(kind==="post"){
+    var rec=posts.filter(function(p){return p.by===c.id&&p.text}).slice(0,3).map(function(p){return p.text});
+    ask=PROMPTS.autoPost(nick(c),lang,rec);cut=L.autoPostCut;
+  }else{
+    var cur=getStatus(c.id);ask=PROMPTS.autoStatus(nick(c),lang,cur&&cur.text);cut=L.autoStatusCut;
+  }
+  var job=demo?new Promise(function(r){setTimeout(function(){r(kind==="post"?"（演示）今天也要加油":"（演示）发呆中")},600)}):
+    fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.9,max_tokens:600,messages:[{role:"system",content:sys},{role:"user",content:ask}]})})
+    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
+    .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("空回复");return String(t)});
+  return job.then(function(t){
+    t=autoClean(t,cut);if(!t)throw new Error("空回复");
+    if(kind==="post"){
+      posts.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,4),by:c.id,text:t,imgs:[],loc:"",mention:[],hide:[],vis:"Friends",t:Date.now(),likes:[],cmts:[]});
+      if(!savePosts()){posts.shift();throw new Error("存储空间不足")}
+      var pg=$("#pgProfile");if(pg&&!pg.hidden&&typeof PVid!=="undefined"&&PVid===c.id)renderProfile();
+    }else setStatus(c.id,t);
+    return true;
+  });
+}
+function autoTick(){
+  if(AUTO.busy||document.hidden||!autoApiOk())return;
+  var now=Date.now(),job=null;
+  contacts.some(function(c){
+    var o=chsGet(c.id);
+    if(o.apOn&&now-(o.apAt||0)>=Math.max(1,parseInt(o.apMin)||180)*60000){job={c:c,k:"post"};return true}
+    if(o.asOn&&now-(o.asAt||0)>=Math.max(1,parseInt(o.asMin)||60)*60000){job={c:c,k:"status"};return true}
+    return false;
+  });
+  if(!job)return;
+  AUTO.busy=true;
+  var o=chsGet(job.c.id),key=job.k==="post"?"apAt":"asAt",gap=Math.max(1,parseInt(job.k==="post"?o.apMin:o.asMin)||60)*60000;
+  autoRun(job.c,job.k).then(function(){o[key]=Date.now()})
+    .catch(function(){o[key]=Date.now()-Math.max(0,gap-5*60000)}) // 失败了就 5 分钟后再试
+    .then(function(){AUTO.busy=false;saveCHS()});
+}
+setInterval(autoTick,20000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(autoTick,1500)});
+setTimeout(autoTick,5000);

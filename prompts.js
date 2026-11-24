@@ -17,6 +17,11 @@ window.PROMPTS={
     wbLookback:6,                // 世界书：看最近几条消息来判断关键词有没有触发
     wbChars:{light:300,medium:600,deep:1500}, // 世界书：轻 / 中 / 深度各自最多带多少字
     stickerNames:60,             // 告诉 AI 最多几个贴纸名字
+    rhythmPick:"weighted",       // 一轮发几条：weighted = 每轮在最少~最多之间随机挑一个数，少的更容易被选中；uniform = 完全随机；range = 不挑数，只告诉 AI 范围
+    autoPostMax:50,              // Char 自己发的动态：要求 AI 写多少字以内（真人随手发的那种，不写日记）
+    autoStatusMax:15,            // Char 自己发的状态：要求 AI 写多少字以内（限时状态，更短）
+    autoPostCut:120,             // 动态硬上限：AI 写太长时，超过这个字数直接截断
+    autoStatusCut:30,            // 状态硬上限
     summaryLang:"中文",          // 记忆自动总结用什么语言写
     summaryGapMin:60             // 聊天里两条消息隔了超过这么多分钟（或跨天），总结时就当成新的一段，只在段首写一次时间
   },
@@ -26,7 +31,7 @@ window.PROMPTS={
   system:"你是{{char}}，正在和{{user}}聊天。\n\n【你的设定】\n{{charDesc}}\n\n【对方的信息】\n{{userPersona}}\n\n请始终保持角色，用自然的聊天口吻回复。",
 
   // ===== 三、说话风格（每次聊天都会带上）=====
-  style:"[Style]\n- You are texting. Write short, natural messages the way a real person texts.\n- Put each separate message on its own line, without numbering. Usually 1 to 5 messages per reply, more only if the user asks.\n- Do not narrate actions in asterisks unless the character would. Never mention being an AI or a language model.\n- Reply in the language the user is writing in, unless the character description says otherwise.",
+  style:"[Style]\n- You are texting. Write short, natural messages the way a real person texts.\n- Put each separate message on its own line, without numbering.\n- Do not narrate actions in asterisks unless the character would. Never mention being an AI or a language model.\n- Reply in the language the user is writing in, unless the character description says otherwise.",
 
   // ===== 四、每次聊天时拼进去的资料段 =====
   // 记忆：items = [{type,text,date}]
@@ -105,8 +110,21 @@ window.PROMPTS={
       "\n- This is background knowledge only. Do not bring it up on your own, do not announce what you are doing, and do not recite the schedule. Mention it only when the user asks (for example what you are doing or where you are) or when it truly matters, such as being too busy to reply right away. When asked, answer naturally in your own words and stay consistent with it; for anything not listed, improvise something that fits.";
   },
   // 一次回复发几条消息
-  outputRhythm:function(min,max){
-    return "[Output Rhythm]\n- Each reply should contain between "+min+" and "+max+" separate messages.";
+  // n 是这一轮要发的条数（由 pickCount 随机挑出）；n 为空就只告诉 AI 范围
+  outputRhythm:function(min,max,n){
+    if(n==null)return "[Output Rhythm]\n- Each reply should contain between "+min+" and "+max+" separate messages. Fewer is fine when there is little to say; never pad with filler to reach the maximum.";
+    return "[Output Rhythm]\n- This reply: send exactly "+n+" separate message"+(n>1?"s":"")+" (the allowed range is "+min+" to "+max+").\n- Do not pad. If you have little to say, keep each message short instead of adding filler or repeating yourself.";
+  },
+  // 每轮在 min~max 之间随机挑一个条数
+  pickCount:function(min,max){
+    var mode=PROMPTS.limits.rhythmPick;
+    if(mode==="range")return null;
+    if(min>=max)return min;
+    var k,w=[],sum=0;
+    for(k=min;k<=max;k++){var x=mode==="uniform"?1:(max-k+1);w.push(x);sum+=x}
+    var r=Math.random()*sum;
+    for(k=min;k<=max;k++){r-=w[k-min];if(r<0)return k}
+    return max;
   },
 
   // ===== 六、后台任务的提示词 =====
@@ -132,6 +150,20 @@ window.PROMPTS={
       "Return ONLY a JSON array of 6 to 10 objects like {\"from\":\"HH:MM\",\"to\":\"HH:MM\",\"text\":\"...\",\"place\":\"...\",\"detail\":\"...\"}, in chronological order, 24-hour clock, covering the whole day from waking up to going to bed (an overnight sleep slot may end the next morning). "+
       "\"text\" is a short headline (under 40 characters) of what they are doing. \"place\" is where they are (under 20 characters). \"detail\" is 1 or 2 concrete short sentences, at most 100 characters in total, about how this stretch of time goes: what they do, who they are with, and their mood. "+
       "Stay true to their persona and daily life. Write all fields in "+lang+". No markdown, no explanation.";
+  },
+  // Char 自己发动态：recent 是它最近发过的几条（避免重复）
+  autoPost:function(name,lang,recent){
+    var L=PROMPTS.limits;
+    return "Write ONE new moments post that "+name+" would publish right now, based on "+name+"'s current situation, the time of day and mood. It must read like a real person's quick post on social media: usually a single short sentence or fragment, at most about "+L.autoPostMax+" characters, casual, with no hashtags, no summary of the day, no diary-style reflection and no explanation. Use an emoji only if it fits. "+
+      (recent&&recent.length?"Do not repeat or closely paraphrase these recent posts: "+recent.join(" | ")+". ":"")+
+      "Write it in "+lang+". Output ONLY the post text, nothing else.";
+  },
+  // Char 自己发状态：current 是它现在的状态文字（要求写一条不一样的）
+  autoStatus:function(name,lang,current){
+    var L=PROMPTS.limits;
+    return "Write ONE short status for "+name+" right now, based on their current situation. It is a 24-hour status line, so keep it tiny: a few words, at most "+L.autoStatusMax+" characters, like what a real person types as a status. No hashtags and no explanation. "+
+      (current?"Their current status is \""+current+"\"; write something different. ":"")+
+      "Write it in "+lang+". Output ONLY the status text, nothing else.";
   },
   // 点气泡翻译
   translate:function(lang){
