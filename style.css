@@ -740,4 +740,4 @@ body::before{content:"";position:fixed;top:env(safe-area-inset-top,0px);left:0;r
 .ubar i{display:block;height:100%;width:0;background:var(--text);border-radius:3px}
 
 /* 记忆日期输入框 */
-input[type="date"]{-webkit-appearance:none;appearance:none;display:block;width:100%;background:none;border:0;outline:0;font:inherit;font-weight:600;color:var(--text);padding:6px 0;min-height:30px;text-align:left}
+input[type="date"],input[type="time"]{-webkit-appearance:none;appearance:none;display:block;width:100%;background:none;border:0;outline:0;font:inherit;font-weight:600;color:var(--text);padding:6px 0;min-height:30px;text-align:left}

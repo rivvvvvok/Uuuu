@@ -13,7 +13,7 @@ window.PROMPTS={
     memImportantTypes:["重要"],  // 这些类型的记忆「每次聊天都会带上」（不会被挤掉）
     memImportantMax:40,          // 上面这类最多带几条（取日期最新的）
     memRecent:60,                // 其他类型的记忆，每次带最近几条（按记忆上的日期排）
-    memChars:300,                // 每条记忆最多带多少字
+    memChars:300,                // 手动写的记忆，每条最多带多少字（自动总结出来的 Summary 不受这个限制，字数按 Chat Settings 里的上限）
     wbLookback:6,                // 世界书：看最近几条消息来判断关键词有没有触发
     wbChars:{light:300,medium:600,deep:1500}, // 世界书：轻 / 中 / 深度各自最多带多少字
     stickerNames:60,             // 告诉 AI 最多几个贴纸名字
@@ -31,7 +31,7 @@ window.PROMPTS={
   // 记忆：items = [{type,text,date}]
   memories:function(items){
     var L=PROMPTS.limits;
-    return "[Memories]\n"+items.map(function(m){return "- ["+m.type+"] "+(m.date?"("+m.date+") ":"")+String(m.text).slice(0,L.memChars)}).join("\n");
+    return "[Memories]\n"+items.map(function(m){return "- ["+m.type+"] "+(m.date?"("+m.date+(m.time?" "+m.time:"")+") ":"")+(m.type==="Summary"?String(m.text):String(m.text).slice(0,L.memChars))}).join("\n");
   },
   // 世界书：items = [{title,content,depth}]
   worldBook:function(items){
@@ -110,9 +110,15 @@ window.PROMPTS={
 
   // ===== 六、后台任务的提示词 =====
   // 记忆自动总结：name 是角色名，cap 是字数上限，lang 见上面的 summaryLang
-  summary:function(name,cap,lang){
-    return "你在为"+name+"写长期记忆。把下面的聊天总结成核心记忆，用"+name+"的第一人称视角来写：关于用户的关键信息、承诺、共同经历、感受和喜好。纯文本，不要开场白，不要 markdown。字数上限 "+cap+" 字。请用"+lang+"书写（人名和专有名词可以保留原文）。";
+  summary:function(name,user,cap,lang){
+    return "你是聊天记录的记忆整理员。把下面的聊天记录整理成客观的事实记忆。\n"+
+      "【视角】第三方旁观视角，直接用人名称呼双方（"+name+"、"+user+"），不要用“我”，不要代入任何一方。\n"+
+      "【内容】只记录事实：发生了什么、说了什么、做了什么决定或承诺、双方提到的个人信息、喜好、计划和安排。\n"+
+      "【时间】聊天记录每行开头方括号里是发送时间。涉及时间的事实要写出具体的日期和时间，格式如“2026-11-23 22:30”。\n"+
+      "【禁止】不要写成日记；不要抒情、心理描写、感受和评价；不要推测，没说过的内容不要编；不要比喻和修饰性的话。\n"+
+      "【格式】每条事实单独一行，以时间开头，语句简短平实。纯文本，不要开场白，不要 markdown。字数上限 "+cap+" 字。请用"+lang+"书写（人名和专有名词可以保留原文）。";
   },
+
   // 生成当天的生活轨迹
   trailAsk:function(name,date,region,tz,lang){
     return "Write "+name+"'s schedule for today ("+date+"). "+(region?"They are in "+region+". ":"")+(tz?"Use their local time ("+tz+"). ":"")+

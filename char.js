@@ -273,21 +273,22 @@ function summarize(cid,manual){
   var seg=list.slice(Math.min(o.ltmAt||0,list.length));
   if(!c||seg.length<2){if(manual)toast("还没有新的聊天可以总结");return Promise.resolve(false)}
   if(sumBusy[cid])return Promise.resolve(false);
-  var cap=Math.max(50,parseInt(o.ltmCap)||500),demo=(a.base||"").trim().toLowerCase()==="demo";
+  var cap=Math.max(1,parseInt(o.ltmCap)||500),demo=(a.base||"").trim().toLowerCase()==="demo";
   if(!demo&&(!a.base||!a.key||!a.model)){if(manual)toast("请先在 Settings 填写 Chat API");return Promise.resolve(false)}
   sumBusy[cid]=1;
-  var convo=seg.filter(function(m){return m.by!=="sys"}).map(function(m){return(m.by==="me"?P.name:nick(c))+": "+m.text}).join("\n").slice(-12000);
+  var convo=seg.filter(function(m){return m.by!=="sys"}).map(function(m){return(m.t?"["+memDay(m.t)+" "+memTm(m.t)+"] ":"")+(m.by==="me"?P.name:nick(c))+": "+m.text}).join("\n");
   var job=demo?new Promise(function(r){setTimeout(function(){r("（演示）这里会是 "+seg.length+" 条聊天的核心记忆总结。")},800)}):
-    fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.3,max_tokens:Math.min(4000,cap*3),messages:[
-      {role:"system",content:PROMPTS.summary(nick(c),cap,PROMPTS.limits.summaryLang)},
+    fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.3,max_tokens:Math.min(16000,cap*3),messages:[
+      {role:"system",content:PROMPTS.summary(nick(c),P.name,cap,PROMPTS.limits.summaryLang)},
       {role:"user",content:convo}]})})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
     .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("空回复");return String(t)});
   return job.then(function(t){
     t=t.replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").trim().slice(0,cap);
     if(!t)throw new Error("空回复");
+    var lt=(seg[seg.length-1]||{}).t||Date.now();
     if(MT.indexOf("Summary")<0)MT.push("Summary");
-    (MEM[cid]||(MEM[cid]=[])).unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:"Summary",text:t,t:Date.now(),date:memDay(Date.now())});
+    (MEM[cid]||(MEM[cid]=[])).unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:"Summary",text:t,t:Date.now(),date:memDay(lt),time:memTm(lt)});
     saveMem();o.ltmAt=list.length;saveCHS();
     if(manual)toast("已生成并存入 Memory");
     return true;

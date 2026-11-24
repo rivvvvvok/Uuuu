@@ -304,8 +304,9 @@ var MT=null;try{MT=JSON.parse(store("memtypes")||"null")}catch(e){}
 if(!Array.isArray(MT)||!MT.length)MT=CONFIG.memoryTypes.slice();
 function saveMem(){try{localStorage.setItem("memories",JSON.stringify(MEM));localStorage.setItem("memtypes",JSON.stringify(MT));return true}catch(e){toast("存储空间不足");return false}}
 function memDay(t){var d=new Date(t||Date.now()),p=function(n){return(n<10?"0":"")+n};return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}
-function memSort(list){return list.slice().sort(function(a,b){var ka=a.date||memDay(a.t),kb=b.date||memDay(b.t);return ka<kb?1:ka>kb?-1:(b.t||0)-(a.t||0)})}
-window.getMemories=function(cid,type){return(MEM[cid]||[]).filter(function(m){return!type||m.type===type}).map(function(m){return{type:m.type,text:m.text,t:m.t,date:m.date||memDay(m.t)}})};
+function memTm(t){var d=new Date(t||Date.now()),p=function(n){return(n<10?"0":"")+n};return p(d.getHours())+":"+p(d.getMinutes())}
+function memSort(list){return list.slice().sort(function(a,b){var ka=(a.date||memDay(a.t))+" "+(a.time||memTm(a.t)),kb=(b.date||memDay(b.t))+" "+(b.time||memTm(b.t));return ka<kb?1:ka>kb?-1:(b.t||0)-(a.t||0)})}
+window.getMemories=function(cid,type){return(MEM[cid]||[]).filter(function(m){return!type||m.type===type}).map(function(m){return{type:m.type,text:m.text,t:m.t,date:m.date||memDay(m.t),time:m.time||memTm(m.t)}})};
 var MV={view:"home",cid:"",type:"All"},ME={};
 function renderMem(){
   var el=$("#pgMem"),h;
@@ -323,7 +324,7 @@ function renderMem(){
       '<div class="fchips" style="flex-wrap:wrap;margin-top:16px">'+["All"].concat(MT).map(function(t){return '<button class="fchip'+(t===MV.type?' on':'')+'" data-mtype="'+esc(t)+'">'+esc(t)+'</button>'}).join("")+'</div>'+
       '<button class="addpill" id="mmAdd"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Add Memory</span></button>'+
       (list.length?list.map(function(m){
-        return '<button class="item" data-mid="'+m.id+'" style="margin-top:8px;align-items:flex-start;padding:12px 14px"><div class="body"><div class="row"><span class="mtag">'+esc(m.type)+'</span><span class="d">'+esc(m.date||memDay(m.t))+'</span></div><div class="mmt">'+esc(m.text)+'</div></div></button>';
+        return '<button class="item" data-mid="'+m.id+'" style="margin-top:8px;align-items:flex-start;padding:12px 14px"><div class="body"><div class="row"><span class="mtag">'+esc(m.type)+'</span><span class="d">'+esc((m.date||memDay(m.t))+" "+(m.time||memTm(m.t)))+'</span></div><div class="mmt">'+esc(m.text)+'</div></div></button>';
       }).join(""):'<div class="empty" style="margin-top:40px">'+(all.length?"这个类型下还没有记忆":"还没有记忆")+'</div>');
   }
   el.innerHTML=h;
@@ -336,7 +337,8 @@ function openMemEdit(id){
     '<div class="card" style="margin-top:16px"><label>Type</label><div class="fchips" id="mmTypes" style="flex-wrap:wrap;margin-top:6px">'+MT.map(function(t){return '<button class="fchip'+(t===ME.type?' on':'')+'" data-metype="'+esc(t)+'">'+esc(t)+'</button>'}).join("")+'</div>'+
     '<div class="fl" style="margin-top:12px"><input id="mmNew" maxlength="8" placeholder="或者新建一个类型（最多 8 个字）"></div></div>'+
     '<div class="card"><label>Date</label><input type="date" id="mmDate" value="'+(x?(x.date||memDay(x.t)):memDay(Date.now()))+'"></div>'+
-    '<div class="card"><label>Content</label><textarea class="tall" id="mmText" maxlength="1000" placeholder="写下这条记忆…（AI 会读取）">'+esc(x&&x.text)+'</textarea></div>'+
+    '<div class="card"><label>Time</label><input type="time" id="mmTime" value="'+(x?(x.time||memTm(x.t)):memTm(Date.now()))+'"></div>'+
+    '<div class="card"><label>Content</label><textarea class="tall" id="mmText" placeholder="写下这条记忆…（AI 会读取）">'+esc(x&&x.text)+'</textarea></div>'+
     (x?'<button class="ghost" id="mmDel">Delete Memory</button>':'')+'</div>';
   $("#sheetWrap").hidden=false;
 }
@@ -357,12 +359,12 @@ $("#sheet").addEventListener("click",function(e){
     MEM[MV.cid]=(MEM[MV.cid]||[]).filter(function(m){return m.id!==ME.id});saveMem();closeSheet();renderMem();toast("已删除");
   }
   else if(t.id==="mmSave"){
-    var tx=$("#mmText").value.trim(),nt=$("#mmNew").value.trim(),ty=ME.type,dv=$("#mmDate").value||memDay(Date.now());
+    var tx=$("#mmText").value.trim(),nt=$("#mmNew").value.trim(),ty=ME.type,dv=$("#mmDate").value||memDay(Date.now()),tv=$("#mmTime").value||memTm(Date.now());
     if(!tx){toast("先写点内容吧");return}
     if(nt){if(MT.indexOf(nt)<0)MT.push(nt);ty=nt}
     var list=MEM[MV.cid]||(MEM[MV.cid]=[]);
-    if(ME.id){list.forEach(function(m){if(m.id===ME.id){m.type=ty;m.text=tx;m.date=dv}})}
-    else list.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:ty,text:tx,t:Date.now(),date:dv});
+    if(ME.id){list.forEach(function(m){if(m.id===ME.id){m.type=ty;m.text=tx;m.date=dv;m.time=tv}})}
+    else list.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:ty,text:tx,t:Date.now(),date:dv,time:tv});
     saveMem();closeSheet();renderMem();toast("已保存");
   }
 });
