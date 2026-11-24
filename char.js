@@ -277,10 +277,10 @@ function summarize(cid,manual){
   if(!demo&&(!a.base||!a.key||!a.model)){if(manual)toast("请先在 Settings 填写 Chat API");return Promise.resolve(false)}
   sumBusy[cid]=1;
   // 聊天记录不再每行带时间：只在「新的一段」开头标一次（隔得久或跨天算新的一段）
-  var gap=(PROMPTS.limits.summaryGapMin||60)*60000,prev=0,lines=[];
+  var tz=memTz(cid),gap=(PROMPTS.limits.summaryGapMin||60)*60000,prev=0,lines=[];
   seg.forEach(function(m){
     if(m.by==="sys")return;
-    if(m.t&&(!prev||m.t-prev>gap||memDay(m.t)!==memDay(prev)))lines.push("=== "+memDay(m.t)+" "+memTm(m.t)+" ===");
+    if(m.t&&(!prev||m.t-prev>gap||memDay(m.t,tz)!==memDay(prev,tz)))lines.push("=== "+memDay(m.t,tz)+" "+memTm(m.t,tz)+" ===");
     if(m.t)prev=m.t;
     lines.push((m.by==="me"?P.name:nick(c))+": "+m.text);
   });
@@ -307,7 +307,7 @@ function summarize(cid,manual){
     if(!t)throw new Error("空回复");
     var lt=(seg[seg.length-1]||{}).t||Date.now();
     if(MT.indexOf("Summary")<0)MT.push("Summary");
-    (MEM[cid]||(MEM[cid]=[])).unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:"Summary",text:t,t:Date.now(),date:memDay(lt),time:memTm(lt),sf:s0,st:e0});
+    (MEM[cid]||(MEM[cid]=[])).unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),type:"Summary",text:t,t:Date.now(),date:memDay(lt,tz),time:memTm(lt,tz),sf:s0,st:e0});
     saveMem();o.ltmAt=e0;saveCHS();
     if(manual)toast("已生成并存入 Memory");
     return true;

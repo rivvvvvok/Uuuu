@@ -303,10 +303,18 @@ var MEM={};try{MEM=JSON.parse(store("memories")||"{}")||{}}catch(e){}
 var MT=null;try{MT=JSON.parse(store("memtypes")||"null")}catch(e){}
 if(!Array.isArray(MT)||!MT.length)MT=CONFIG.memoryTypes.slice();
 function saveMem(){try{localStorage.setItem("memories",JSON.stringify(MEM));localStorage.setItem("memtypes",JSON.stringify(MT));return true}catch(e){toast("存储空间不足");return false}}
-function memDay(t){var d=new Date(t||Date.now()),p=function(n){return(n<10?"0":"")+n};return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}
-function memTm(t){var d=new Date(t||Date.now()),p=function(n){return(n<10?"0":"")+n};return p(d.getHours())+":"+p(d.getMinutes())}
-function memSort(list){return list.slice().sort(function(a,b){var ka=(a.date||memDay(a.t))+" "+(a.time||memTm(a.t)),kb=(b.date||memDay(b.t))+" "+(b.time||memTm(b.t));return ka<kb?1:ka>kb?-1:(b.t||0)-(a.t||0)})}
-window.getMemories=function(cid,type){return(MEM[cid]||[]).filter(function(m){return!type||m.type===type}).map(function(m){return{type:m.type,text:m.text,t:m.t,date:m.date||memDay(m.t),time:m.time||memTm(m.t)}})};
+// 记忆里的日期、时间一律按「你自己的时区」写：该 Char 的 Chat Settings 里填了 Your time zone 就用它，没填就用手机本地时间
+function memTz(cid){try{var z=(typeof chsGet==="function"&&cid)?String(chsGet(cid).userTz||"").trim():"";if(z)new Intl.DateTimeFormat("en",{timeZone:z});return z||undefined}catch(e){return undefined}}
+function memParts(t,tz){
+  var d=new Date(t||Date.now());
+  if(tz){try{var o={};new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(d).forEach(function(x){o[x.type]=x.value});return{y:o.year,mo:o.month,d:o.day,h:o.hour,mi:o.minute}}catch(e){}}
+  var p=function(n){return(n<10?"0":"")+n};
+  return{y:String(d.getFullYear()),mo:p(d.getMonth()+1),d:p(d.getDate()),h:p(d.getHours()),mi:p(d.getMinutes())};
+}
+function memDay(t,tz){var q=memParts(t,tz);return q.y+"-"+q.mo+"-"+q.d}
+function memTm(t,tz){var q=memParts(t,tz);return q.h+":"+q.mi}
+function memSort(list,tz){return list.slice().sort(function(a,b){var ka=(a.date||memDay(a.t,tz))+" "+(a.time||memTm(a.t,tz)),kb=(b.date||memDay(b.t,tz))+" "+(b.time||memTm(b.t,tz));return ka<kb?1:ka>kb?-1:(b.t||0)-(a.t||0)})}
+window.getMemories=function(cid,type){var tz=memTz(cid);return(MEM[cid]||[]).filter(function(m){return!type||m.type===type}).map(function(m){return{type:m.type,text:m.text,t:m.t,date:m.date||memDay(m.t,tz),time:m.time||memTm(m.t,tz)}})};
 var MV={view:"home",cid:"",type:"All"},ME={};
 function renderMem(){
   var el=$("#pgMem"),h;
@@ -319,12 +327,12 @@ function renderMem(){
     }).join("")+'</div>':'<div class="empty">还没有联系人<br>先去 CONTACTS 添加角色</div>';
   }else{
     var c=cget(MV.cid);if(!c){MV.view="home";return renderMem()}
-    var all=MEM[MV.cid]||[],list=memSort(all.filter(function(m){return MV.type==="All"||m.type===MV.type}));
+    var all=MEM[MV.cid]||[],list=memSort(all.filter(function(m){return MV.type==="All"||m.type===MV.type}),memTz(MV.cid));
     h='<div class="sTitle"><button class="circle" id="mmBack" aria-label="返回">'+BACK+'</button><h1>'+esc(nick(c))+'</h1></div>'+
       '<div class="fchips" style="flex-wrap:wrap;margin-top:16px">'+["All"].concat(MT).map(function(t){return '<button class="fchip'+(t===MV.type?' on':'')+'" data-mtype="'+esc(t)+'">'+esc(t)+'</button>'}).join("")+'</div>'+
       '<button class="addpill" id="mmAdd"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Add Memory</span></button>'+
       (list.length?list.map(function(m){
-        return '<button class="item" data-mid="'+m.id+'" style="margin-top:8px;align-items:flex-start;padding:12px 14px"><div class="body"><div class="row"><span class="mtag">'+esc(m.type)+'</span><span class="d">'+esc((m.date||memDay(m.t))+" "+(m.time||memTm(m.t)))+'</span></div><div class="mmt">'+esc(m.text)+'</div></div></button>';
+        return '<button class="item" data-mid="'+m.id+'" style="margin-top:8px;align-items:flex-start;padding:12px 14px"><div class="body"><div class="row"><span class="mtag">'+esc(m.type)+'</span><span class="d">'+esc((m.date||memDay(m.t,memTz(MV.cid)))+" "+(m.time||memTm(m.t,memTz(MV.cid))))+'</span></div><div class="mmt">'+esc(m.text)+'</div></div></button>';
       }).join(""):'<div class="empty" style="margin-top:40px">'+(all.length?"这个类型下还没有记忆":"还没有记忆")+'</div>');
   }
   el.innerHTML=h;
@@ -336,8 +344,8 @@ function openMemEdit(id){
     '<div style="max-height:62vh;overflow-y:auto">'+
     '<div class="card" style="margin-top:16px"><label>Type</label><div class="fchips" id="mmTypes" style="flex-wrap:wrap;margin-top:6px">'+MT.map(function(t){return '<button class="fchip'+(t===ME.type?' on':'')+'" data-metype="'+esc(t)+'">'+esc(t)+'</button>'}).join("")+'</div>'+
     '<div class="fl" style="margin-top:12px"><input id="mmNew" maxlength="8" placeholder="或者新建一个类型（最多 8 个字）"></div></div>'+
-    '<div class="card"><label>Date</label><input type="date" id="mmDate" value="'+(x?(x.date||memDay(x.t)):memDay(Date.now()))+'"></div>'+
-    '<div class="card"><label>Time</label><input type="time" id="mmTime" value="'+(x?(x.time||memTm(x.t)):memTm(Date.now()))+'"></div>'+
+    '<div class="card"><label>Date</label><input type="date" id="mmDate" value="'+(x?(x.date||memDay(x.t,memTz(MV.cid))):memDay(Date.now(),memTz(MV.cid)))+'"></div>'+
+    '<div class="card"><label>Time</label><input type="time" id="mmTime" value="'+(x?(x.time||memTm(x.t,memTz(MV.cid))):memTm(Date.now(),memTz(MV.cid)))+'"></div>'+
     '<div class="card"><label>Content</label><textarea class="tall" id="mmText" placeholder="写下这条记忆…（AI 会读取）">'+esc(x&&x.text)+'</textarea></div>'+
     (x?'<button class="ghost" id="mmDel">Delete Memory</button>':'')+'</div>';
   $("#sheetWrap").hidden=false;
@@ -362,7 +370,7 @@ $("#sheet").addEventListener("click",function(e){
     MEM[MV.cid]=(MEM[MV.cid]||[]).filter(function(m){return m.id!==ME.id});saveMem();closeSheet();renderMem();toast(rb?"已删除，这段聊天可以重新总结":"已删除");
   }
   else if(t.id==="mmSave"){
-    var tx=$("#mmText").value.trim(),nt=$("#mmNew").value.trim(),ty=ME.type,dv=$("#mmDate").value||memDay(Date.now()),tv=$("#mmTime").value||memTm(Date.now());
+    var tx=$("#mmText").value.trim(),nt=$("#mmNew").value.trim(),ty=ME.type,dv=$("#mmDate").value||memDay(Date.now(),memTz(MV.cid)),tv=$("#mmTime").value||memTm(Date.now(),memTz(MV.cid));
     if(!tx){toast("先写点内容吧");return}
     if(nt){if(MT.indexOf(nt)<0)MT.push(nt);ty=nt}
     var list=MEM[MV.cid]||(MEM[MV.cid]=[]);
