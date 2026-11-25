@@ -72,7 +72,7 @@ function renderChat(keep){
   var c=cget(CUR),list=msgs(CUR),h="",prev=null,sc=$("#chScroll"),top=sc.scrollTop;
   var brk=false;
   list.forEach(function(m,i){
-    if(m.by==="sys"){h+='<div class="sysmsg">'+esc(m.text)+'</div>';brk=true;return}
+    if(m.by==="sys"){h+='<div class="sysmsg'+(SEL.ids[m.id]?' sel':'')+'" data-i="'+i+'">'+esc(m.text)+'</div>';brk=true;return}
     var pill=!prev||m.t-prev.t>15*60000,me=m.by==="me";
     if(pill)h+='<div class="tpill">'+stamp(m.t)+'</div>';
     if(pill||brk||prev.by!==m.by)h+='<div class="mh'+(me?' me':'')+'"><div class="avatar">'+avh(me?P.avatar:c.avatar)+'</div><div class="mt"><b>'+esc(me?P.name:nick(c))+'</b><span>'+mtime(m.t)+'</span></div></div>';
@@ -168,6 +168,26 @@ function chatPostAct(c,a){
   if(!savePosts()){posts.shift();src.rps--;return ""}
   return nick(c)+" 转发了你的动态，并 @ 了你";
 }
+// ---------- 识图：把用户发的图片交给 Image Recognition 描述一遍，再把描述放进聊天记录发给聊天模型 ----------
+var VFAIL={};
+function describeImg(m){
+  var v=S.vision;
+  if((v.base||"").trim().toLowerCase()==="demo"){m.desc="（演示）一张图片";saveChats();return Promise.resolve()}
+  return fetch(apiUrl(v,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+v.key},body:JSON.stringify({model:v.model,max_tokens:500,messages:[{role:"user",content:[{type:"text",text:PROMPTS.visionAsk(PROMPTS.limits.visionLang)},{type:"image_url",image_url:{url:m.img}}]}]})})
+    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
+    .then(function(j){
+      var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
+      t=String(t||"").replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").trim();
+      if(!t)throw new Error("识图接口没有返回内容");
+      m.desc=t.slice(0,PROMPTS.limits.visionCut);saveChats();
+    });
+}
+function ensureVision(list,n){
+  var v=S.vision;if(!(v.base&&(v.base.trim().toLowerCase()==="demo"||(v.key&&v.model))))return Promise.resolve();
+  var todo=list.slice(-n).filter(function(m){return m.type==="img"&&m.by==="me"&&m.img&&!m.desc&&!VFAIL[m.id]}).slice(-PROMPTS.limits.visionMax);
+  if(!todo.length)return Promise.resolve();
+  return Promise.all(todo.map(function(m){return describeImg(m).catch(function(e){VFAIL[m.id]=1;toast("识图失败："+String(e.message||e).slice(0,60),3200)})}));
+}
 function getReply(){
   var id=CUR,c=cget(id),co=chsGet(id);
   if(THT[id]){delete THT[id];saveTHT();heartDot()}
@@ -176,7 +196,7 @@ function getReply(){
     if(ls.length){busy=true;renderChat();updateSend();setTimeout(function(){reveal(id,[ls[Math.floor(Math.random()*ls.length)].trim()],0)},900);return}
   }
   busy=true;renderChat();updateSend();
-  callAI(c,msgs(id)).then(function(text){
+  ensureVision(msgs(id),Math.max(2,parseInt(chsGet(id).mem)||30)).then(function(){return callAI(c,msgs(id))}).then(function(text){
     text=text.replace(/<think>[\s\S]*?(<\/think>|$)/gi,"");
     var tm=text.match(/\[thought:\s*([\s\S]*?)\]/i);if(tm&&chsGet(id).thoughts&&tm[1].trim())PTH[id]=tm[1].trim();
     text=text.replace(/\s*\[thought:[\s\S]*?\]\s*/ig,"\n");
@@ -243,7 +263,7 @@ $("#chHead").onclick=function(e){
 };
 $("#chScroll").onclick=function(e){
   if(!SEL.on)return;
-  var b=e.target.closest(".b");if(!b||b.classList.contains("typing"))return;
+  var b=e.target.closest(".b,.sysmsg");if(!b||b.classList.contains("typing"))return;
   var m=msgs(CUR)[+b.dataset.i];if(!m)return;
   if(SEL.ids[m.id])delete SEL.ids[m.id];else SEL.ids[m.id]=1;
   selUI();renderChat(true);

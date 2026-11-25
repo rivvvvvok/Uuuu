@@ -339,7 +339,7 @@ function stBlob(key,u){
 function stSrc(m){if(m.sid){var r="",k="";SD.stickers.forEach(function(x){if(x.id===m.sid){r=x.img;k=x.id}});if(r)return stBlob(k,r)}return stBlob("m"+(m.id||""),m.img||"")}
 function qWho(q){if(q.by==="me")return P.name;var c=cget(CUR);return c?nick(c):"Char"}
 function qpack(m){return{id:m.id,by:m.by,text:String(m.text||"").replace(/\s+/g," ").trim().slice(0,80)}}
-function qtx(m){return(m.q&&m.by==="me"?'[Replying to '+qWho(m.q)+': "'+m.q.text+'"] ':'')+m.text}
+function qtx(m){return(m.q&&m.by==="me"?'[Replying to '+qWho(m.q)+': "'+m.q.text+'"] ':'')+(m.type==="img"&&m.desc?PROMPTS.imageNote(m.desc):m.text)}
 function qHTML(m){
   if(!m.q||(m.type&&m.type!=="voice"))return '';
   return '<div class="qt" data-qid="'+m.q.id+'"><b>'+esc(qWho(m.q))+'</b><span>'+esc(m.q.text)+'</span></div>';
