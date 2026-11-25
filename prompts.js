@@ -34,7 +34,7 @@ window.PROMPTS={
     autoPostCut:120,             // 动态硬上限：AI 写太长时，超过这个字数直接截断
     autoStatusCut:30,            // 状态硬上限
     visionMax:4,                 // 一次回复前，最多现场识别几张还没识别过的图片（取最新的）
-    visionCut:600,               // 每张图的描述最多保留多少字
+    visionCut:200,               // 每张图的描述最多保留多少字（同时也会写进给识图模型的要求里）
     visionLang:"中文",           // 图片描述用什么语言写
     summaryLang:"中文",          // 记忆自动总结用什么语言写
     summaryGapMin:60             // 聊天里两条消息隔了超过这么多分钟（或跨天），总结时就当成新的一段，只在段首写一次时间
@@ -208,7 +208,7 @@ window.PROMPTS={
   },
   // 识图：发给 Image Recognition 模型的要求
   visionAsk:function(lang){
-    return "Describe this image for someone who cannot see it. In 2 to 4 sentences, state the main subject(s), the setting, notable details, any readable text, and the overall mood. Be objective and concrete, and do not guess who real people are. Write in "+lang+".";
+    return "Describe this image for someone who cannot see it, in 1 to 3 short sentences and at most "+PROMPTS.limits.visionCut+" characters in total. State the main subject(s), the setting, notable details, any readable text, and the overall mood. Be objective and concrete, and do not guess who real people are. Write in "+lang+".";
   },
   // 把图片描述放进聊天记录里，让聊天模型“看到”这张图
   imageNote:function(desc){return "[The user sent an image. What it shows: "+desc+"]"},
