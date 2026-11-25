@@ -240,7 +240,7 @@ function phSheet(k){
 // ---------- Chat Settings (per Char) ----------
 // getChatSettings(id): 供内置功能读取这位 Char 的聊天设置
 var CHS={};try{CHS=JSON.parse(store("chatset")||"{}")}catch(e){}
-var CHD={mem:150,bg:false,bgMin:30,apOn:false,apMin:180,apAt:0,asOn:false,asMin:60,asAt:0,life:false,charTz:"",userTz:"",charRegion:"",userRegion:"",voice:false,voiceId:"",charLang:"",trLang:"",trOpen:false,aware:false,outMin:1,outMax:5,thoughts:false,wbOff:[],blocked:false,vtMe:true,vtChar:true,chBg:"",cot:false,busyOn:false,arMode:"busy",ar:{busy:["","",""],focus:["","",""],sleep:["","",""]},emoFreq:"mid",voiceFreq:"low",ltm:false,ltmEvery:90,ltmCap:500,ltmAt:0};
+var CHD={mem:150,bg:false,bgMin:30,apOn:false,apMin:180,apAt:0,asOn:false,asMin:60,asAt:0,life:false,charTz:"",userTz:"",charRegion:"",userRegion:"",voice:false,voiceId:"",charLang:"",trLang:"",trOpen:false,aware:false,outMin:1,outMax:5,thoughts:false,wbOff:[],blocked:false,reactOn:true,vtMe:true,vtChar:true,chBg:"",cot:false,busyOn:false,arMode:"busy",ar:{busy:["","",""],focus:["","",""],sleep:["","",""]},emoFreq:"mid",voiceFreq:"low",ltm:false,ltmEvery:90,ltmCap:500,ltmAt:0};
 function chsGet(id){var o=CHS[id]||(CHS[id]={});for(var k in CHD)if(o[k]===undefined)o[k]=(typeof CHD[k]==="object")?JSON.parse(JSON.stringify(CHD[k])):CHD[k];return o}
 function saveCHS(){try{localStorage.setItem("chatset",JSON.stringify(CHS));return true}catch(e){toast("存储空间不足");return false}}
 window.getChatSettings=function(id){return JSON.parse(JSON.stringify(chsGet(id)))};
@@ -256,6 +256,7 @@ function chsPrompt(id){
   if(o.charLang){r.push(PROMPTS.language(o.charLang));r.push(PROMPTS.translation(o.trLang))}
   if(o.cot)r.push(PROMPTS.reasoning());
   r.push(PROMPTS.quoting());
+  r.push(PROMPTS.moments(feedFor(id),statusFor(id)));
   if(o.emoFreq!=="off"&&SD.stickers.length){
     r.push(PROMPTS.stickers(SD.stickers.slice(0,PROMPTS.limits.stickerNames).map(function(x,ix){return stName(x,ix)}),o.emoFreq));
   }
@@ -348,8 +349,9 @@ function renderChSet(){
     '<div class="hint" style="margin:12px 4px 0">'+esc(nick(c))+' 的聊天设置，只对这位 Char 生效</div>'+
     '<div class="sgrp">Overview</div><div class="card"><div class="fl"><div class="srow"><b>Total messages</b><span class="v">'+total+'</span></div></div><div class="fl"><div class="srow"><b>Estimated tokens (this round)</b><span class="v">≈ '+estRound(c)+'</span></div><div class="hint">按当前设定的记忆深度估算：系统提示词 + 最近聊天记录，只含输入部分</div></div></div>'+
     '<div class="sgrp">Background Chat</div><div class="card">'+chT("bg","Message you on their own","开启后，Char 会在后台主动私发消息")+chI("bgMin","Interval (minutes)","30",{num:1})+'</div>'+
-    '<div class="sgrp">Auto Post</div><div class="card">'+chT("apOn","Post moments on their own","开启后，Char 隔一段时间会根据当前状态自己发一条动态：一两句话，像真人随手发的")+chI("apMin","Interval (minutes)","180",{num:1,sub:"只有 App 开着时才会计时；很久没打开的话，下次打开会补发一条"})+'</div>'+
-    '<div class="sgrp">Auto Status</div><div class="card">'+chT("asOn","Set status on their own","开启后，Char 隔一段时间会自己更新一条限时状态：几个字，24 小时后消失")+chI("asMin","Interval (minutes)","60",{num:1})+'</div>'+
+    '<div class="sgrp">Moments Interaction</div><div class="card">'+chT("reactOn","Like & comment on my moments","开启后，Char 会随机、不定时地给你的动态点赞、评论，也会回复你的评论。不是每条都会，也不会立刻，就像真人刷到了才互动")+'</div>'+
+    '<div class="sgrp">Auto Post</div><div class="card">'+chT("apOn","Post moments on their own","开启后，Char 隔一段时间会根据当前状态自己发一条动态：一两句话，像真人随手发的")+chI("apMin","Interval (minutes)","180",{num:1,sub:"计时按真实时间算：中途关掉 App 也不会重置，下次打开发现到点了就补发一条。App 关着的时候发不出来，想让它在后台也发，可以到 Settings 里打开 Keep Alive"})+'</div>'+
+    '<div class="sgrp">Auto Status</div><div class="card">'+chT("asOn","Set status on their own","开启后，Char 隔一段时间会自己更新一条限时状态：几个字，24 小时后消失")+chI("asMin","Interval (minutes)","60",{num:1,sub:"计时按真实时间算：中途关掉 App 也不会重置，下次打开发现到点了就补发一条。App 关着的时候发不出来，想让它在后台也发，可以到 Settings 里打开 Keep Alive"})+'</div>'+
     '<div class="sgrp">Life Trail</div><div class="card">'+chT("life","Life trail status","让 Char 拥有自己的生活轨迹和当前状态")+'</div>'+
     '<div class="sgrp">Time & Place</div><datalist id="tzList">'+tzs.map(function(z){return '<option value="'+z+'">'}).join("")+'</datalist><div class="card">'+
       chI("charTz","Char time zone","例如 Asia/Tokyo",{list:"tzList",tz:1})+chI("userTz","Your time zone","例如 America/New_York",{list:"tzList",tz:1})+
@@ -446,7 +448,7 @@ $("#pgChset").onchange=function(e){
 
 
 // ---------- Char 自己发动态 / 状态 ----------
-// 每位 Char 在 Chat Settings 里分别开关、分别设间隔（分钟）。只有 App 开着时才会计时，打开后发现到点了就补发一条。
+// 每位 Char 在 Chat Settings 里分别开关、分别设间隔（分钟）。计时按真实时间算（记在每位 Char 的设置里，关掉 App 不会重置）；App 开着、或者开了 Keep Alive 时才会真正发出，到点没发的，下次打开补发一条。
 var AUTO={busy:false};
 function autoApiOk(){var a=S.api;return (a.base||"").trim().toLowerCase()==="demo"||!!(a.base&&a.key&&a.model)}
 function autoClean(t,cut){
@@ -480,10 +482,12 @@ function autoRun(c,kind){
   });
 }
 function autoTick(){
-  if(AUTO.busy||document.hidden||!autoApiOk())return;
+  if(AUTO.busy||!autoApiOk())return;
   var now=Date.now(),job=null;
   contacts.some(function(c){
     var o=chsGet(c.id);
+    if(o.apOn&&!o.apAt){o.apAt=now;saveCHS()} // 刚开启：从现在开始计时
+    if(o.asOn&&!o.asAt){o.asAt=now;saveCHS()}
     if(o.apOn&&now-(o.apAt||0)>=Math.max(1,parseInt(o.apMin)||180)*60000){job={c:c,k:"post"};return true}
     if(o.asOn&&now-(o.asAt||0)>=Math.max(1,parseInt(o.asMin)||60)*60000){job={c:c,k:"status"};return true}
     return false;
@@ -498,3 +502,108 @@ function autoTick(){
 setInterval(autoTick,20000);
 document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(autoTick,1500)});
 setTimeout(autoTick,5000);
+
+
+// ---------- Char 互动：点赞 / 评论 / 回复评论，以及动态流上下文 ----------
+// 你发动态后、或评论/回复了 Char 之后，把「Char 之后可能会来互动」排进队列（存本地，关掉 App 不丢）。
+// 到点 + App 开着时，才让 AI 决定点不点赞、评不评论；没刷到的、AI 觉得没兴趣的，就什么都不做。
+function agoEn(t){var m=Math.max(0,Math.round((Date.now()-t)/60000));if(m<2)return "just now";if(m<60)return m+"m ago";var h=Math.round(m/60);if(h<48)return h+"h ago";return Math.round(h/24)+"d ago"}
+function cutText(s,n){return String(s||"").replace(/\s+/g," ").trim().slice(0,n)}
+function visibleTo(p,cid){if(p.vis==="Only me")return false;if(p.hide&&p.hide.indexOf(cid)>-1)return false;return true}
+function feedFor(cid){
+  var L=PROMPTS.limits,out=[],n=0;
+  for(var i=0;i<posts.length&&n<L.feedPosts;i++){
+    var p=posts[i];if(!visibleTo(p,cid))continue;n++;
+    var line="#"+p.id+" "+who(p.by).name+(p.by==="me"?" (user)":p.by===cid?" (you)":"")+", "+agoEn(p.t)+": "+(cutText(p.text,L.feedCut)||"(no text)");
+    if(p.rp)line+=" [reposted "+who(p.rp.by).name+": "+cutText(p.rp.text,40)+"]";
+    if(p.imgs&&p.imgs.length)line+=" [+"+p.imgs.length+" photo(s) you can't see]";
+    if(p.mention&&p.mention.length)line+=" [mentions "+p.mention.map(function(x){return who(x).name}).join(", ")+"]";
+    if(p.likes&&p.likes.length)line+=" | liked by "+p.likes.map(function(x){return who(x).name}).join(", ");
+    if(p.cmts&&p.cmts.length)line+=" | comments: "+p.cmts.slice(-L.feedCmts).map(function(c){return who(c.by).name+(c.re?" replied to "+who(c.re.by).name:"")+": "+cutText(c.text,40)}).join(" ; ");
+    out.push(line);
+  }
+  return out;
+}
+function statusFor(cid){
+  var r=[],su=getStatus("me"),sc=getStatus(cid);
+  if(su&&su.text)r.push("User's status: "+su.text);
+  if(sc&&sc.text)r.push("Your own status: "+sc.text);
+  return r;
+}
+var INTQ=[];try{INTQ=JSON.parse(store("intq")||"[]")||[]}catch(e){}
+var INT={busy:false};
+function saveINTQ(){try{localStorage.setItem("intq",JSON.stringify(INTQ.slice(-60)))}catch(e){}}
+function rnd(a,b){return a+Math.random()*(b-a)}
+function qid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
+window.intOnMyPost=function(p){
+  var L=PROMPTS.limits;
+  contacts.forEach(function(c){
+    var o=chsGet(c.id);
+    if(!o.reactOn||o.blocked||!visibleTo(p,c.id))return;
+    if(Math.random()>L.reactSeeChance)return; // 这位 Char 根本没刷到
+    INTQ.push({id:qid(),k:"post",cid:c.id,pid:p.id,due:Date.now()+rnd(L.reactDelayMin,L.reactDelayMax)*60000});
+  });
+  saveINTQ();
+};
+window.intOnMyComment=function(p,cm){
+  var L=PROMPTS.limits,tid=cm.re?cm.re.by:p.by;
+  if(!tid||tid==="me"||!cget(tid))return;
+  var o=chsGet(tid);if(!o.reactOn||o.blocked)return;
+  if(Math.random()>L.replyChance)return;
+  INTQ.push({id:qid(),k:"reply",cid:tid,pid:p.id,cmt:cm.t,due:Date.now()+rnd(L.replyDelayMin,L.replyDelayMax)*60000});
+  saveINTQ();
+};
+function aiText(sys,ask,demoText,maxTok){
+  var a=S.api;
+  if((a.base||"").trim().toLowerCase()==="demo")return new Promise(function(r){setTimeout(function(){r(demoText)},500)});
+  return fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.9,max_tokens:maxTok||300,messages:[{role:"system",content:sys},{role:"user",content:ask}]})})
+    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
+    .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("空回复");return String(t)});
+}
+function intJSON(t){t=String(t||"").replace(/<think>[\s\S]*?(<\/think>|$)/gi,"");var i=t.indexOf("{"),j=t.lastIndexOf("}");if(i<0||j<i)return null;try{return JSON.parse(t.slice(i,j+1))}catch(e){return null}}
+function postBlock(p){var s=cutText(p.text,200)||"(no text)";if(p.rp)s+=" [reposted "+who(p.rp.by).name+": "+cutText(p.rp.text,80)+"]";if(p.imgs&&p.imgs.length)s+=" [+"+p.imgs.length+" photo(s) you can't see]";return s}
+function threadOf(p){return p.cmts.slice(-6).map(function(c){return who(c.by).name+(c.re?" replied to "+who(c.re.by).name:"")+": "+cutText(c.text,60)}).join("\n")}
+function intRun(it){
+  var c=cget(it.cid),p=null;posts.forEach(function(x){if(x.id===it.pid)p=x});
+  if(!c||!p)return Promise.resolve(false);
+  var o=chsGet(c.id);if(!o.reactOn||o.blocked)return Promise.resolve(false);
+  var L=PROMPTS.limits,lang=o.charLang||"the language this character normally uses",sys="";
+  try{sys=buildSystem(c,msgs(c.id).slice(-8))}catch(e){}
+  if(it.k==="post"){
+    if(!visibleTo(p,c.id))return Promise.resolve(false);
+    return aiText(sys,PROMPTS.reactPost(nick(c),lang,who(p.by).name,postBlock(p),threadOf(p),L.reactCut),'{"like":true,"comment":"（演示）好看"}',200).then(function(t){
+      var j=intJSON(t);if(!j)return false;
+      var did=false;
+      if(j.like&&p.likes.indexOf(c.id)<0)did=window.charLike(c.id,p.id)||did;
+      var cm=autoClean(j.comment,L.reactCut);
+      if(cm&&!p.cmts.some(function(x){return x.by===c.id&&!x.re}))did=window.charComment(c.id,p.id,cm)||did;
+      return did;
+    });
+  }
+  var mine=null;p.cmts.forEach(function(x){if(x.by==="me"&&x.t===it.cmt)mine=x});
+  if(!mine)return Promise.resolve(false);
+  return aiText(sys,PROMPTS.replyComment(nick(c),lang,postBlock(p),threadOf(p),cutText(mine.text,120),L.replyCut),"（演示）哈哈",200).then(function(t){
+    if(/\[skip\]/i.test(t))return false;
+    var rp=autoClean(t,L.replyCut);if(!rp)return false;
+    return window.charComment(c.id,p.id,rp,"me");
+  });
+}
+function refreshMoments(){
+  if(typeof cmtId!=="undefined"&&cmtId)return; // 你正在写评论时不刷新，免得输入被清掉
+  var m=$("#pgMoments");if(m&&!m.hidden)renderMoments();
+  var pf=$("#pgProfile");if(pf&&!pf.hidden)renderProfile();
+}
+function intTick(){
+  if(INT.busy||AUTO.busy||!autoApiOk())return;
+  var now=Date.now(),it=null,dirty=false;
+  INTQ=INTQ.filter(function(x){if(now-x.due>864e5){dirty=true;return false}return true}); // 过期一天以上的直接丢掉
+  for(var i=0;i<INTQ.length;i++){if(INTQ[i].due<=now){it=INTQ[i];break}}
+  if(dirty)saveINTQ();
+  if(!it)return;
+  INT.busy=true;
+  INTQ=INTQ.filter(function(x){return x!==it});saveINTQ(); // 先出队：失败了也不重试，真人也会漏看
+  intRun(it).then(function(ok){if(ok)refreshMoments()}).catch(function(){}).then(function(){INT.busy=false});
+}
+setInterval(intTick,15000);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)setTimeout(intTick,2000)});
+setTimeout(intTick,7000);

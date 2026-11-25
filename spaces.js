@@ -187,7 +187,7 @@ var SK={
 var SV={kind:"texts",cat:"All"},SArm=null,SC={};
 function savedCard(x){
   var a=who(x.char),armed=SArm===x.id;
-  var main=SV.kind==="thoughts"?'<div class="sq">“'+esc(x.text)+'”</div>':'<div class="nm">'+esc(a.name)+'</div><div class="st">'+esc(x.text)+'</div>';
+  var main=SV.kind==="thoughts"?'<div class="sq">'+esc(x.text)+'</div>':'<div class="nm">'+esc(a.name)+'</div><div class="st">'+esc(x.text)+'</div>';
   return '<div class="scard"><div class="avatar">'+avh(a.avatar)+'</div><div class="body">'+main+'</div><div class="sr"><span class="sd">'+mdLabel(x.date)+'</span><button class="pmore'+(armed?' arm':'')+'" data-svdel="'+x.id+'">'+(armed?"Delete":I.dots)+'</button></div></div>';
 }
 function renderSaved(){
@@ -387,16 +387,17 @@ function renderProfile(){
   var ci=$("#pgProfile #cIn");if(ci)ci.focus();
 }
 $("#pgProfile").onclick=function(e){
-  var b=e.target.closest("button");if(!b)return;
+  var b=e.target.closest("button,[data-act=reply]");if(!b)return;
   if(b.id==="pfBack"){go("contacts");return}
   if(b.id==="pfEdit"){openForm(PVid);return}
   if(b.dataset.ptab){PT=b.dataset.ptab;cmtId=null;renderProfile();return}
   var act=b.dataset.act;if(!act)return;
+  if(act==="reply"){if(Date.now()-(window.__cmtLP||0)<800)return;RT={pid:b.dataset.pid,ci:+b.dataset.ci};cmtId=RT.pid;renderProfile();return}
   var id=b.dataset.id,pp=null;posts.forEach(function(x){if(x.id===id)pp=x});
   if(act==="like"&&pp){var i=pp.likes.indexOf("me");if(i>-1)pp.likes.splice(i,1);else pp.likes.push("me");savePosts()}
-  else if(act==="cmt")cmtId=cmtId===id?null:id;
+  else if(act==="cmt"){cmtId=cmtId===id?null:id;RT=null}
   else if(act==="fwd"){if(pp)openFwd(pp);return}
-  else if(act==="send"&&pp){var v=$("#pgProfile #cIn").value.trim();if(!v)return;pp.cmts.push({by:"me",text:v,t:Date.now()});savePosts();cmtId=null}
+  else if(act==="send"&&pp){var v=$("#pgProfile #cIn").value.trim();if(!v)return;var cm={by:"me",text:v,t:Date.now()};if(RT&&RT.pid===pp.id&&pp.cmts[RT.ci])cm.re={by:pp.cmts[RT.ci].by};pp.cmts.push(cm);RT=null;savePosts();try{window.intOnMyComment(pp,cm)}catch(e){}cmtId=null}
   renderProfile();
 };
 // 以后 Char 发帖 / 点赞 / 评论调用这三个（会同步显示在 Moments 和该 Char 的主页）
@@ -410,10 +411,10 @@ window.charLike=function(charId,postId){
   if(!pp||!cget(charId)||pp.likes.indexOf(charId)>-1)return false;
   pp.likes.push(charId);return savePosts();
 };
-window.charComment=function(charId,postId,text){
+window.charComment=function(charId,postId,text,replyToBy){
   var pp=null;posts.forEach(function(x){if(x.id===postId)pp=x});
   if(!pp||!cget(charId)||!String(text||"").trim())return false;
-  pp.cmts.push({by:charId,text:String(text).trim(),t:Date.now()});return savePosts();
+  var cm={by:charId,text:String(text).trim(),t:Date.now()};if(replyToBy)cm.re={by:replyToBy};pp.cmts.push(cm);return savePosts();
 };
 
 // ---------- 限时状态（24 小时） ----------

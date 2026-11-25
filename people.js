@@ -122,6 +122,7 @@ function who(id){if(id==="me")return{name:P.name,avatar:P.avatar};var r={name:"U
 function avh(a){return a?'<img src="'+a+'">':PERSON}
 function names(ids){return ids.map(function(i){return who(i).name}).join(", ")}
 
+var RT=null; // 正在回复的评论 {pid,ci}
 function postHTML(p){
   var a=who(p.by),liked=p.likes.indexOf("me")>-1,meta=[];
   if(p.loc)meta.push(esc(p.loc));
@@ -137,8 +138,8 @@ function postHTML(p){
     '<div class="pact"><button class="'+(liked?'liked':'')+'" data-act="like" data-id="'+p.id+'">'+I.heart+(p.likes.length||"")+'</button>'+
     '<button data-act="cmt" data-id="'+p.id+'">'+I.cmt+(p.cmts.length||"")+'</button>'+
     '<button data-act="fwd" data-id="'+p.id+'">'+I.fwd+(p.rps||"")+'</button></div>'+
-    (p.cmts.length?'<div class="cmts">'+p.cmts.map(function(c,i){return '<div data-pid="'+p.id+'" data-ci="'+i+'"><b>'+esc(who(c.by).name)+'</b> '+esc(c.text)+'</div>'}).join("")+'</div>':'')+
-    (cmtId===p.id?'<div class="cin"><input id="cIn" placeholder="写评论…" maxlength="200"><button data-act="send" data-id="'+p.id+'">Send</button></div>':'')+
+    (p.cmts.length?'<div class="cmts">'+p.cmts.map(function(c,i){return '<div data-pid="'+p.id+'" data-ci="'+i+'"'+(c.by!=="me"?' data-act="reply"':'')+'><b>'+esc(who(c.by).name)+'</b>'+(c.re?' 回复 <b>'+esc(who(c.re.by).name)+'</b>':'')+' '+esc(c.text)+'</div>'}).join("")+'</div>':'')+
+    (cmtId===p.id?'<div class="cin"><input id="cIn" placeholder="'+(RT&&RT.pid===p.id&&p.cmts[RT.ci]?'回复 '+esc(who(p.cmts[RT.ci].by).name)+'…':'写评论…')+'" maxlength="200"><button data-act="send" data-id="'+p.id+'">Send</button></div>':'')+
     '</div>';
 }
 function renderMoments(){
@@ -154,13 +155,14 @@ $("#pgMoments").onclick=function(e){
   var b=e.target.closest("[data-act]");if(!b)return;
   var act=b.dataset.act,id=b.dataset.id,p=null;posts.forEach(function(x){if(x.id===id)p=x});
   if(act!=="del")armId=null;
+  if(act==="reply"){if(Date.now()-(window.__cmtLP||0)<800)return;RT={pid:b.dataset.pid,ci:+b.dataset.ci};cmtId=RT.pid;renderMoments();return}
   if(act==="new"){openCompose();return}
   if(act==="stedit"){openStatus(false);return}
   if(act==="tab")momTab=b.dataset.v;
   else if(act==="like"&&p){var i=p.likes.indexOf("me");if(i>-1)p.likes.splice(i,1);else p.likes.push("me");savePosts()}
-  else if(act==="cmt")cmtId=cmtId===id?null:id;
+  else if(act==="cmt"){cmtId=cmtId===id?null:id;RT=null}
   else if(act==="fwd"){if(p)openFwd(p);return}
-  else if(act==="send"&&p){var v=$("#cIn").value.trim();if(!v)return;p.cmts.push({by:"me",text:v,t:Date.now()});savePosts();cmtId=null}
+  else if(act==="send"&&p){var v=$("#cIn").value.trim();if(!v)return;var cm={by:"me",text:v,t:Date.now()};if(RT&&RT.pid===p.id&&p.cmts[RT.ci])cm.re={by:p.cmts[RT.ci].by};p.cmts.push(cm);RT=null;savePosts();try{window.intOnMyComment(p,cm)}catch(e){}cmtId=null}
   else if(act==="del"){if(armId===id){posts=posts.filter(function(x){return x.id!==id});savePosts();armId=null}else armId=id}
   renderMoments();
 };
@@ -197,6 +199,7 @@ $("#sheet").onclick=function(e){
     if(!canPost())return;
     var o={id:Date.now().toString(36),by:"me",text:D.text.trim(),imgs:D.imgs,loc:D.loc.trim(),mention:D.mention,hide:D.hide,vis:D.vis,t:Date.now(),likes:[],cmts:[]};
     posts.unshift(o);if(!savePosts()){posts.shift();return}
+    try{window.intOnMyPost(o)}catch(e){}
     closeSheet();momTab="posts";renderMoments();toast("已发布");return;
   }
   var tl=t.dataset.tl;if(!tl)return;
@@ -231,6 +234,7 @@ $("#sheet").addEventListener("click",function(e){
     var o={id:Date.now().toString(36),by:"me",text:($("#rpText").value||"").trim(),imgs:[],loc:"",mention:[],hide:[],vis:"Friends",t:Date.now(),likes:[],cmts:[],rp:{by:src.by,text:src.text||"",img:src.img||""}};
     p.rps=(p.rps||0)+1;posts.unshift(o);
     if(!savePosts()){posts.shift();p.rps--;return}
+    try{window.intOnMyPost(o)}catch(e){}
     FW=null;closeSheet();momTab="posts";renderMoments();var pf=$("#pgProfile");if(pf&&!pf.hidden)renderProfile();toast("已转发");
   }
 });
@@ -238,6 +242,7 @@ $("#sheet").addEventListener("click",function(e){
 // ---- 长按评论：删除 ----
 var CMT=null;
 function openCmtMenu(pid,ci){
+  window.__cmtLP=Date.now();
   var p=null;posts.forEach(function(x){if(x.id===pid)p=x});if(!p||!p.cmts[ci])return;
   try{getSelection().removeAllRanges()}catch(e){}
   CMT={pid:pid,ci:ci};var c=p.cmts[ci];

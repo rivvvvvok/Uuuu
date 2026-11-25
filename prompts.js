@@ -10,6 +10,17 @@ window.PROMPTS={
 
   // ===== 一、数量和长度上限 =====
   limits:{
+    feedPosts:12,                // 动态流：Char 每次聊天/互动时能看到最近几条动态（Moments 页上所有人加起来，按时间排）
+    feedCmts:3,                  // 动态流：每条动态最多带最近几条评论
+    feedCut:80,                  // 动态流：每条动态最多带多少字
+    reactSeeChance:0.7,          // 你发动态后，每位 Char「刷到」的概率（没刷到就完全不会互动）
+    reactDelayMin:3,             // 刷到之后，最快过几分钟才会看（真正互动前还要 App 开着）
+    reactDelayMax:120,           // 刷到之后，最晚过几分钟（在最快~最晚之间随机）
+    reactCut:50,                 // Char 评论动态最多几个字
+    replyChance:0.85,            // 你评论/回复了 Char 之后，Char 回复你的概率
+    replyDelayMin:1,             // 回复最快几分钟
+    replyDelayMax:30,            // 回复最晚几分钟
+    replyCut:50,                 // Char 回复评论最多几个字
     memImportantTypes:["重要"],  // 这些类型的记忆「每次聊天都会带上」（不会被挤掉）
     memImportantMax:40,          // 上面这类最多带几条（取日期最新的）
     memRecent:60,                // 其他类型的记忆，每次带最近几条（按记忆上的日期排）
@@ -108,6 +119,33 @@ window.PROMPTS={
       (trl.now?"\n- Right now you are: "+trl.now.text+(trl.now.place?" @ "+trl.now.place:"")+(trl.now.detail?" ("+String(trl.now.detail).slice(0,100)+")":""):"")+
       "\n- Your schedule today: "+trl.items.map(function(x){return x.from+"-"+x.to+" "+x.text}).join("; ")+
       "\n- This is background knowledge only. Do not bring it up on your own, do not announce what you are doing, and do not recite the schedule. Mention it only when the user asks (for example what you are doing or where you are) or when it truly matters, such as being too busy to reply right away. When asked, answer naturally in your own words and stay consistent with it; for anything not listed, improvise something that fits.";
+  },
+  // 动态：Char 可以在聊天里发动态、转发你的动态（list = 你最近的动态 [{id,text}]）
+  // 动态流 + 状态：这位 Char 眼里最近的动态（只是背景信息）。lines / status 由 feedFor / statusFor 生成
+  feed:function(lines,status){
+    var o="[Moments Feed, newest first]\n"+(lines.length?lines.join("\n"):"(empty)");
+    if(status&&status.length)o+="\n[Statuses right now]\n"+status.join("\n");
+    return o;
+  },
+  // 动态：Char 可以在聊天里发动态、转发你的动态
+  moments:function(lines,status){
+    return "[Moments]\n"+
+      "- You can post to your own Moments feed. Do it only when the user asks you to, or when you really feel like sharing something. To post, write a separate message in exactly this form: [post: the text of your post]. The text inside is what appears in your feed, written the way you would really post it.\n"+
+      "- You can repost one of the user's moments when the user asks. Write a separate message: [repost:#ID] your comment. The comment may be empty. The repost automatically @s the user. Only use the ID of a post marked (user) in the feed below.\n"+
+      "- Never say these tags out loud and never explain them. A message that contains a tag should contain only the tag.\n"+
+      "- The feed below is what you can see on Moments. You may mention things from it naturally if it fits the conversation, but do not recite it.\n"+
+      PROMPTS.feed(lines,status);
+  },
+  // Char 刷到你的动态：决定点不点赞、评不评论（只回 JSON）
+  reactPost:function(name,lang,author,postText,cmts,cut){
+    return "You are "+name+", scrolling your Moments feed right now. You come across this post by "+author+":\n"+postText+"\n"+(cmts?"Comments so far:\n"+cmts+"\n":"")+
+      "Decide how you, as this person, would honestly react. Real people usually just scroll past; they only like or comment when something really catches their interest or touches them, and many posts get nothing at all.\n"+
+      "Reply with ONLY a JSON object, no other text: {\"like\":true or false,\"comment\":\"\"}. Leave comment empty unless you genuinely have something to say. If you comment, keep it under "+cut+" characters, casual, written in "+lang+", with no quotation marks around it.";
+  },
+  // Char 回复你的评论
+  replyComment:function(name,lang,postText,thread,mine,cut){
+    return "You are "+name+". Someone just commented on a post in your Moments feed.\nPost: "+postText+"\nThe conversation under it:\n"+thread+"\nThe comment you are answering: "+mine+"\n"+
+      "Write your reply to that comment, under "+cut+" characters, casual, written in "+lang+", true to how you really talk. Output only the reply text, with no quotation marks. If you honestly would not bother replying, output exactly [skip].";
   },
   // 一次回复发几条消息
   // n 是这一轮要发的条数（由 pickCount 随机挑出）；n 为空就只告诉 AI 范围

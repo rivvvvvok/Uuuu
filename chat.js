@@ -154,6 +154,20 @@ function resetXfers(id,removed){
     }
   });
 }
+var PACT={};
+function chatPostAct(c,a){
+  if(a.k==="post"){
+    if(window.addCharPost(c.id,a.text,[],""))return nick(c)+" 发布了一条动态："+a.text.slice(0,30)+(a.text.length>30?"…":"");
+    return "";
+  }
+  var src=null;posts.forEach(function(x){if(x.id===a.pid&&x.by==="me")src=x});
+  if(!src)return "";
+  var o0=src.rp||{by:src.by,text:src.text,img:(src.imgs&&src.imgs[0])||""};
+  posts.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),by:c.id,text:a.text,imgs:[],loc:"",mention:["me"],hide:[],vis:"Friends",t:Date.now(),likes:[],cmts:[],rp:{by:o0.by,text:o0.text||"",img:o0.img||""}});
+  src.rps=(src.rps||0)+1;
+  if(!savePosts()){posts.shift();src.rps--;return ""}
+  return nick(c)+" 转发了你的动态，并 @ 了你";
+}
 function getReply(){
   var id=CUR,c=cget(id),co=chsGet(id);
   if(THT[id]){delete THT[id];saveTHT();heartDot()}
@@ -166,10 +180,22 @@ function getReply(){
     text=text.replace(/<think>[\s\S]*?(<\/think>|$)/gi,"");
     var tm=text.match(/\[thought:\s*([\s\S]*?)\]/i);if(tm&&chsGet(id).thoughts&&tm[1].trim())PTH[id]=tm[1].trim();
     text=text.replace(/\s*\[thought:[\s\S]*?\]\s*/ig,"\n");
+    var acts=[];
+    text=text.replace(/\[post:\s*([^\]]+)\]/ig,function(_,t){t=t.trim();if(t&&acts.length<2)acts.push({k:"post",text:t});return "\n"});
+    text=text.replace(/\[repost:\s*#?([\w-]+)\s*\]([^\n\[]*)/ig,function(_,pid,cm){if(acts.length<2)acts.push({k:"repost",pid:pid,text:(cm||"").trim()});return "\n"});
+    var notes=[];acts.forEach(function(a){var n="";try{n=chatPostAct(c,a)}catch(e){}if(n)notes.push(n)});
+    PACT[id]=notes.length?notes:null;
     var parts=text.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);
     var hasX=msgs(id).some(function(m){return m.by==="me"&&m.type==="transfer"&&!m.st}),dec=null,rb="b"+Date.now().toString(36);
     if(hasX)parts=parts.map(function(x){var mm=x.match(/\[(accept|return)\]/i);if(mm){dec=mm[1].toLowerCase();x=x.replace(/\s*\[(accept|return)\]\s*/ig," ").trim()}return x}).filter(Boolean);
     var capN=Math.max(1,chsGet(id).outMin,chsGet(id).outMax);if(parts.length>capN)parts=parts.slice(0,capN); // 保险：AI 超过上限时，多出来的不发
+    if(!parts.length&&notes.length){
+      busy=false;PACT[id]=null;
+      if(PTH[id]){THT[id]={text:PTH[id],t:Date.now(),saved:false,seen:false};delete PTH[id];saveTHT()}
+      notes.forEach(function(n){sysNote(id,n)});
+      if(CUR===id){renderChat();updateSend()}
+      return;
+    }
     parts=parts.length?parts:["…"];var trs=[];
     parts=parts.map(function(x,i){var k=x.split(/\s*(?:\|\|\||｜｜｜)\s*/);if(k.length>1){trs[i]=k.slice(1).join(" ").trim();return k[0].trim()||"…"}return x});
     PTR[id]=trs;RB[id]=rb;if(hasX)applyXfer(id,dec||"accept",rb);reveal(id,parts,0);
@@ -180,6 +206,7 @@ function reveal(id,parts,i){
   var nm=aiMsg(id,parts[i],i);if(PTR[id]&&PTR[id][i])nm.tr=PTR[id][i];if(last)PTR[id]=null;if(RB[id])nm.rb=RB[id];if(last)RB[id]=null;msgs(id).push(nm);saveChats();if(chsGet(id).trOpen){if(nm.tr)nm.trShow=true;else if(!nm.type)autoTr(id,nm)}
   try{if(!(CUR===id&&!$("#pgChat").hidden))window.notifyMsg(id,nm.text)}catch(e){}
   if(CUR===id){renderChat();updateSend()}
+  if(last&&PACT[id]){var ns=PACT[id];PACT[id]=null;ns.forEach(function(n){sysNote(id,n)})}
   if(!last)setTimeout(function(){reveal(id,parts,i+1)},Math.min(1400,350+parts[i+1].length*30));
 }
 function sendMsg(reply){
