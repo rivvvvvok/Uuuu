@@ -35,6 +35,8 @@ window.PROMPTS={
     autoStatusCut:30,            // 状态硬上限
     visionMax:4,                 // 一次回复前，最多现场识别几张还没识别过的图片（取最新的）
     visionCut:200,               // 每张图的描述最多保留多少字（同时也会写进给识图模型的要求里）
+    visionSide:768,              // 发给识图模型前，把图片缩到最长边多少像素（太大有些中转站会直接丢掉图片）
+    visionRefuse:/please (upload|provide|send|attach)|upload the image|no image|(can'?not|can't|unable to) (see|view|access)|do(n't| not) see any|没有(看到|收到).{0,6}图|无法(看到|查看|识别)|请(上传|提供|发送)/i, // 识图模型的回复如果像这样，说明它根本没看到图，不当作描述
     visionLang:"中文",           // 图片描述用什么语言写
     summaryLang:"中文",          // 记忆自动总结用什么语言写
     summaryGapMin:60             // 聊天里两条消息隔了超过这么多分钟（或跨天），总结时就当成新的一段，只在段首写一次时间
@@ -212,6 +214,8 @@ window.PROMPTS={
   },
   // 把图片描述放进聊天记录里，让聊天模型“看到”这张图
   imageNote:function(desc){return "[The user sent an image. What it shows: "+desc+"]"},
+  // 没能识别出图片内容时
+  imageUnseen:function(){return "[The user sent an image, but you cannot see what is in it. If it matters, say honestly that you cannot see it; never pretend to.]"},
   // 点气泡翻译
   translate:function(lang){
     return "Translate the user's message into "+lang+". Output only the translation, with no explanations or quotation marks.";

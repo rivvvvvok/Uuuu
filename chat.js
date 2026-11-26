@@ -170,15 +170,27 @@ function chatPostAct(c,a){
 }
 // ---------- 识图：把用户发的图片交给 Image Recognition 描述一遍，再把描述放进聊天记录发给聊天模型 ----------
 var VFAIL={};
+// 把图片缩小再发给识图模型：原图太大时，有些中转站会把图片丢掉，模型就会回一句“请上传图片”
+function shrinkForVision(url,side){
+  return new Promise(function(res){
+    var im=new Image();
+    im.onload=function(){var s=Math.min(1,side/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*s));c.height=Math.max(1,Math.round(im.height*s));var x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",.75))};
+    im.onerror=function(){res(url)};im.src=url;
+  });
+}
 function describeImg(m){
   var v=S.vision;
   if((v.base||"").trim().toLowerCase()==="demo"){m.desc="（演示）一张图片";saveChats();return Promise.resolve()}
-  return fetch(apiUrl(v,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+v.key},body:JSON.stringify({model:v.model,max_tokens:500,messages:[{role:"user",content:[{type:"text",text:PROMPTS.visionAsk(PROMPTS.limits.visionLang)},{type:"image_url",image_url:{url:m.img}}]}]})})
+  if(String(m.img).indexOf("idb:img:")===0)return Promise.reject(new Error("这张图片还没加载好，稍后再试"));
+  return shrinkForVision(m.img,PROMPTS.limits.visionSide).then(function(u){
+    return fetch(apiUrl(v,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+v.key},body:JSON.stringify({model:v.model,max_tokens:500,messages:[{role:"user",content:[{type:"text",text:PROMPTS.visionAsk(PROMPTS.limits.visionLang)},{type:"image_url",image_url:{url:u}}]}]})});
+  })
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
     .then(function(j){
       var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
       t=String(t||"").replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").trim();
       if(!t)throw new Error("识图接口没有返回内容");
+      if(PROMPTS.limits.visionRefuse.test(t))throw new Error("识图模型没看到图片，它回复的是“"+t.slice(0,30)+"”。请确认选的是支持识图的模型");
       m.desc=t.slice(0,PROMPTS.limits.visionCut);saveChats();
     });
 }
