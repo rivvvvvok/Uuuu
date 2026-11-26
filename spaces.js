@@ -392,12 +392,14 @@ $("#pgProfile").onclick=function(e){
   if(b.id==="pfEdit"){openForm(PVid);return}
   if(b.dataset.ptab){PT=b.dataset.ptab;cmtId=null;renderProfile();return}
   var act=b.dataset.act;if(!act)return;
+  if(act!=="del")armId=null;
   if(act==="reply"){if(Date.now()-(window.__cmtLP||0)<800)return;RT={pid:b.dataset.pid,ci:+b.dataset.ci};cmtId=RT.pid;renderProfile();return}
   var id=b.dataset.id,pp=null;posts.forEach(function(x){if(x.id===id)pp=x});
   if(act==="like"&&pp){var i=pp.likes.indexOf("me");if(i>-1)pp.likes.splice(i,1);else pp.likes.push("me");savePosts()}
   else if(act==="cmt"){cmtId=cmtId===id?null:id;RT=null}
   else if(act==="fwd"){if(pp)openFwd(pp);return}
   else if(act==="send"&&pp){var v=$("#pgProfile #cIn").value.trim();if(!v)return;var cm={by:"me",text:v,t:Date.now()};if(RT&&RT.pid===pp.id&&pp.cmts[RT.ci])cm.re={by:pp.cmts[RT.ci].by};pp.cmts.push(cm);RT=null;savePosts();try{window.intOnMyComment(pp,cm)}catch(e){}cmtId=null}
+  else if(act==="del"){if(armId===id){delPost(id);armId=null}else armId=id}
   renderProfile();
 };
 // 以后 Char 发帖 / 点赞 / 评论调用这三个（会同步显示在 Moments 和该 Char 的主页）

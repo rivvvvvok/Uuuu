@@ -105,6 +105,13 @@ var posts=[];try{posts=JSON.parse(store("posts")||"[]")}catch(e){}
 function savePosts(){try{localStorage.setItem("posts",JSON.stringify(posts));return true}catch(e){toast("存储空间不足，图片可能太大");return false}}
 window.getPosts=function(){return posts};
 var momTab="posts",armId=null,cmtId=null,D={};
+// 删除一条动态（我的、Char 的都可以）：同时清掉还在排队的互动，并回收图片占用的空间
+function delPost(id){
+  var gone=null;posts.forEach(function(x){if(x.id===id)gone=x});
+  posts=posts.filter(function(x){return x.id!==id});savePosts();
+  try{if(typeof INTQ!=="undefined"){INTQ=INTQ.filter(function(q){return q.pid!==id});if(window.saveINTQ)saveINTQ()}}catch(e){}
+  if(gone&&gone.imgs&&gone.imgs.length){try{IMG.gc()}catch(e){}}
+}
 var I={
  heart:'<svg viewBox="0 0 24 24"><path d="M12 20.500C6 16.500 3.500 13 3.500 9.500A4.500 4.500 0 0112 7.200 4.500 4.500 0 0120.500 9.500C20.500 13 18 16.500 12 20.500z"/></svg>',
  cmt:'<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-11.600 7.100L4 20l1.100-4.500A8 8 0 1121 12z"/></svg>',
@@ -130,7 +137,7 @@ function postHTML(p){
   if(p.vis==="Only me")meta.push("Only me");
   var n=p.imgs?p.imgs.length:0;
   return '<div class="post"><div class="ph"><div class="avatar">'+avh(a.avatar)+'</div><div><div class="pn">'+esc(a.name)+'</div><div class="pt">'+ago(p.t)+'</div></div>'+
-    (p.by==="me"?'<button class="pmore'+(armId===p.id?' arm':'')+'" data-act="del" data-id="'+p.id+'">'+(armId===p.id?'Delete':I.dots)+'</button>':'')+'</div>'+
+    '<button class="pmore'+(armId===p.id?' arm':'')+'" data-act="del" data-id="'+p.id+'">'+(armId===p.id?'Delete':I.dots)+'</button></div>'+
     (p.text?'<div class="ptx">'+esc(p.text)+'</div>':'')+
     (p.rp?'<div class="rpq"><div class="rph"><div class="avatar">'+avh(who(p.rp.by).avatar)+'</div><b>'+esc(who(p.rp.by).name)+'</b></div>'+(p.rp.text?'<div class="rpt">'+esc(p.rp.text)+'</div>':'')+(p.rp.img?'<img class="rpi" src="'+p.rp.img+'">':'')+'</div>':'')+
     (n?'<div class="pimgs n'+Math.min(n,3)+(n===4?' q':'')+'">'+p.imgs.map(function(s){return '<img src="'+s+'">'}).join("")+'</div>':'')+
@@ -163,7 +170,7 @@ $("#pgMoments").onclick=function(e){
   else if(act==="cmt"){cmtId=cmtId===id?null:id;RT=null}
   else if(act==="fwd"){if(p)openFwd(p);return}
   else if(act==="send"&&p){var v=$("#cIn").value.trim();if(!v)return;var cm={by:"me",text:v,t:Date.now()};if(RT&&RT.pid===p.id&&p.cmts[RT.ci])cm.re={by:p.cmts[RT.ci].by};p.cmts.push(cm);RT=null;savePosts();try{window.intOnMyComment(p,cm)}catch(e){}cmtId=null}
-  else if(act==="del"){if(armId===id){posts=posts.filter(function(x){return x.id!==id});savePosts();armId=null}else armId=id}
+  else if(act==="del"){if(armId===id){delPost(id);armId=null}else armId=id}
   renderMoments();
 };
 $("#pgMoments").onkeydown=function(e){if(e.key==="Enter"&&e.target.id==="cIn"){var b=$("#pgMoments [data-act=send]");if(b)b.click()}};
