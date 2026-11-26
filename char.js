@@ -254,7 +254,7 @@ function chsPrompt(id){
   if(o.blocked)r.push(PROMPTS.blocked());
   if(o.thoughts)r.push(PROMPTS.innerVoice());
   if(o.charLang){r.push(PROMPTS.language(o.charLang));r.push(PROMPTS.translation(o.trLang))}
-  if(o.cot)r.push(PROMPTS.reasoning());
+  var cm=cotMode(o);if(cm!=="off")r.push(PROMPTS.reasoning(cm));
   r.push(PROMPTS.quoting());
   r.push(PROMPTS.moments(feedFor(id),statusFor(id)));
   if(o.emoFreq!=="off"&&SD.stickers.length){
@@ -327,9 +327,11 @@ function tzNow(tz){try{return "Now there: "+new Date().toLocaleTimeString("en-US
 function tzOk(tz){try{new Intl.DateTimeFormat("en",{timeZone:tz});return true}catch(e){return false}}
 function chT(key,label,sub){var o=chsGet(CUR);return '<div class="fl"><button class="srow" data-ct="'+key+'"><b>'+label+'</b><i class="sw'+(o[key]?' on':'')+'"></i></button>'+(sub?'<div class="hint">'+sub+'</div>':'')+'</div>'}
 function chI(key,label,ph,opt){opt=opt||{};var o=chsGet(CUR);return '<div class="fl"><label>'+label+'</label><input data-cf="'+key+'" '+(opt.num?'type="number" inputmode="numeric" ':'autocapitalize="off" autocorrect="off" spellcheck="false" ')+(opt.list?'list="'+opt.list+'" ':'')+'placeholder="'+ph+'" value="'+esc(o[key])+'">'+(opt.tz?'<div class="hint" id="tzn_'+key+'">'+tzNow(o[key])+'</div>':'')+(opt.sub?'<div class="hint">'+opt.sub+'</div>':'')+'</div>'}
-function chSeg(key,label,sub){
-  var o=chsGet(CUR),opts=[["off","Never"],["low","Rarely"],["mid","Sometimes"],["high","Often"]];
-  return '<div class="fl"><label>'+label+'</label><div class="seg" data-sgk="'+key+'" style="margin-top:8px">'+opts.map(function(x){return '<button data-sg="'+x[0]+'" class="'+(o[key]===x[0]?'on':'')+'">'+x[1]+'</button>'}).join("")+'</div>'+(sub?'<div class="hint">'+sub+'</div>':'')+'</div>';
+// 思维链档位：off / short / long（旧版本是开关，开着的算 short）
+function cotMode(o){return o.cot===true?"short":(o.cot==="short"||o.cot==="long"?o.cot:"off")}
+function chSeg(key,label,sub,optsIn,cur){
+  var o=chsGet(CUR),opts=optsIn||[["off","Never"],["low","Rarely"],["mid","Sometimes"],["high","Often"]];if(cur==null)cur=o[key];
+  return '<div class="fl"><label>'+label+'</label><div class="seg" data-sgk="'+key+'" style="margin-top:8px">'+opts.map(function(x){return '<button data-sg="'+x[0]+'" class="'+(cur===x[0]?'on':'')+'">'+x[1]+'</button>'}).join("")+'</div>'+(sub?'<div class="hint">'+sub+'</div>':'')+'</div>';
 }
 function arHTML(){
   var o=chsGet(CUR),m=o.arMode,ls=o.ar[m]||["","",""];
@@ -359,7 +361,7 @@ function renderChSet(){
     '<div class="sgrp">Voice</div><div class="card">'+chT("voice","Voice generation","开启后 Char 的消息可以生成语音")+chI("voiceId","Voice ID (optional)","留空则使用 Settings 里的声音")+chT("vtMe","Show text on my voice messages","开启后，你发的语音下面会展开识别出的文字")+chT("vtChar","Show text on Char's voice messages","开启后，Char 发的语音下面会展开文字")+'</div>'+
     '<div class="sgrp">Language & Translation</div><div class="card">'+chI("charLang","Char language","例如 English, 日本語")+chI("trLang","Translate into","例如 中文")+chT("trOpen","Auto-expand translation","开启后，翻译气泡默认直接展开，不用再点一下")+'</div>'+
     '<div class="sgrp">Awareness</div><div class="card">'+chT("aware","Moment awareness","让 Char 感知并主动提及近期的网络动态")+'</div>'+
-    '<div class="sgrp">Reasoning</div><div class="card">'+chT("cot","Chain of thought","回复前先进行深度思维推理，防止脱离人设。会让回复稍慢一些，也多用一些 tokens")+'</div>'+
+    '<div class="sgrp">Reasoning</div><div class="card">'+chSeg("cot","Chain of thought","回复前先想一遍：对方的情绪、我此刻的感受、避免重复、不出戏、不像AI。Short 约 200 字，Long 约 600 字且检查更细；越长越慢、越费 tokens",[["off","Off"],["short","Short"],["long","Long"]],cotMode(chsGet(CUR)))+'</div>'+
     '<div class="sgrp">Auto Reply</div><div class="card">'+chT("busyOn","Auto-reply when busy","开启后，Char 会直接用下面的自定义回复应答，不再调用 AI")+'<div id="arBox">'+arHTML()+'</div></div>'+
     '<div class="sgrp">Output</div><div class="card"><div class="fl"><label>Messages per round</label><div class="rng"><input data-cf="outMin" type="number" inputmode="numeric" placeholder="min" value="'+o.outMin+'"><span>to</span><input data-cf="outMax" type="number" inputmode="numeric" placeholder="max" value="'+o.outMax+'"></div></div>'+
       chSeg("emoFreq","Sticker frequency","只控制表情标签，不限制普通消息里的 emoji")+chSeg("voiceFreq","Voice frequency","需要先开启上面的 Voice generation")+chI("mem","Short-term memory (messages)","150",{num:1,sub:"Char 每次回复时能读到的最近聊天条数，默认 150"})+chT("thoughts","Inner thoughts each round","开启后，Char 每轮回复都会带一条心声，点聊天栏里的爱心查看。一轮刷一轮，想留下就收藏")+'</div>'+

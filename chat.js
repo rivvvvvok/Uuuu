@@ -126,7 +126,8 @@ function callAI(c,list){
   if(!a.base||!a.key||!a.model)return Promise.reject(new Error("请先在 Settings 里填写 Chat API"));
   var n=Math.max(2,parseInt(chsGet(c.id).mem)||parseInt(a.ctx)||30),hist=[],tp=parseFloat(a.temp);if(isNaN(tp))tp=0.8;
   list.slice(-n).forEach(function(m){if(m.by==="sys")return;var role=m.by==="me"?"user":"assistant",l=hist[hist.length-1];if(l&&l.role===role)l.content+="\n"+qtx(m);else hist.push({role:role,content:qtx(m)})});
-  var body={model:a.model,messages:[{role:"system",content:buildSystem(c,list)}].concat(hist),temperature:tp,max_tokens:parseInt(a.max)||1024};
+  var mt=parseInt(a.max)||1024,minT=PROMPTS.limits.cotMinTokens[cotMode(chsGet(c.id))];if(minT&&mt<minT)mt=minT; // 开了思维链就自动把字数上限拉高，免得思考没写完被截断
+  var body={model:a.model,messages:[{role:"system",content:buildSystem(c,list)}].concat(hist),temperature:tp,max_tokens:mt};
   return fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify(body)})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
     .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("接口没有返回内容");return String(t)})

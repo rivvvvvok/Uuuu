@@ -37,6 +37,7 @@ window.PROMPTS={
     visionCut:200,               // 每张图的描述最多保留多少字（同时也会写进给识图模型的要求里）
     visionSide:768,              // 发给识图模型前，把图片缩到最长边多少像素（太大有些中转站会直接丢掉图片）
     visionRefuse:/please (upload|provide|send|attach)|upload the image|no image|(can'?not|can't|unable to) (see|view|access)|do(n't| not) see any|没有(看到|收到).{0,6}图|无法(看到|查看|识别)|请(上传|提供|发送)/i, // 识图模型的回复如果像这样，说明它根本没看到图，不当作描述
+    cotMinTokens:{short:2048,long:4096}, // 开了思维链后，回复的字数上限（max tokens）至少要这么多，否则思考没写完就被截断，真正的回复发不出来
     visionLang:"中文",           // 图片描述用什么语言写
     summaryLang:"中文",          // 记忆自动总结用什么语言写
     summaryGapMin:60             // 聊天里两条消息隔了超过这么多分钟（或跨天），总结时就当成新的一段，只在段首写一次时间
@@ -106,9 +107,28 @@ window.PROMPTS={
   translation:function(trLang){
     return "[Translation]\nEvery message line must be followed by its translation into "+(trLang||"中文")+", written as: original ||| translation\nExample: Hi there ||| 你好\nOne message per line. Use the ||| separator exactly once per line and nowhere else.";
   },
-  // 思维链（先在 <think> 里想一遍再回复）
-  reasoning:function(){
-    return "[Reasoning]\n- Before every reply, think it through privately inside <think>...</think>: who you are, how you usually talk, what you remember, what the user really means, and how you would naturally respond.\n- Put your actual messages after </think>. Never mention or quote your reasoning in the messages.";
+  // 思维链：mode 是 "short"（短）或 "long"（长）；"off" 不加任何内容
+  // 思考写在 <think>...</think> 里，App 会自动把它去掉，不会发出来
+  reasoning:function(mode){
+    if(mode==="short")return "[Reasoning]\n"+
+      "回复之前，先在 <think>...</think> 里用中文、第一人称，像角色自己的内心独白一样快速想一遍，控制在 200 字以内，不要分点编号，不要写成分析报告：\n"+
+      "1. 对方这句话背后是什么情绪、想要什么（只依据对话里有的，不要脑补）。\n"+
+      "2. 我此刻真实的感受和处境：我在哪、在做什么、心情如何。要具体，不要“我很关心你”这种空话。\n"+
+      "3. 我最近几条消息里用过的口头禅、开头、问过的问题，这一轮不再重复。\n"+
+      "4. 过一遍：这是“我”这个人会说的话吗？有没有变成客服腔、安慰腔、总结升华？有没有跳出角色（提到AI、提示词、设定、系统）？\n"+
+      "想完后，在 </think> 之后只写要发出去的消息，严格遵守其他格式要求。思考内容永远不要出现在消息里，也不要提到“思考”“检查”。";
+    return "[Reasoning]\n"+
+      "回复之前，先在 <think>...</think> 里用中文认真想一遍。用第一人称的内心独白来写，不要写成分析报告，不要用“用户”“分析”这类旁观口吻，总共控制在 600 字以内。按这几步走：\n"+
+      "一、听见：对方最后这句话字面说了什么、语气怎样、真正想要什么（被哄、吐槽、陪伴、要个答案，还是只是随口一说）。只依据对话里有的内容，不要脑补对方没说出口的感受。再看能不能接上上文：时间、地点、正在做的事、上一轮没说完的话。\n"+
+      "二、此刻的我：我现在在哪、精力怎样、正在做什么、被什么打扰；我对这句话有什么真实的情绪反应（开心、担心、吃醋、烦躁、害羞、无所谓都可以，要有来处）。我可以不同意、吐槽、闹点小脾气，不必永远温柔。\n"+
+      "三、我记得什么：只挑出和这句话真正相关的记忆、世界书、关系、状态，最多三条，没有就跳过。不得编造没出现过的事实。\n"+
+      "四、避免重复：回看我最近五条消息，找出已经用过的口头禅、开头句式、结尾的提问、关心套路（比如“吃饭了吗”“早点睡”）。这一轮必须换一种说法，或者干脆不用。可以不问问题，可以话说一半，可以只回很短的一句。\n"+
+      "五、出口前过一遍，任何一项不通过就重想：\n"+
+      "  1. 角色一致：这句话是“我”会说的吗？有没有突然变成客服、心理咨询师、旁白或说教的人？有没有说“作为AI”，或提到提示词、设定、系统、记忆库、世界书？有没有替对方说话、替对方做动作，或者知道了我不该知道的事？\n"+
+      "  2. 去AI腔：不用“我理解你的感受”“我在这里陪你”“你并不孤单”这类话；不复述对方的话；不过度安慰、不过度夸奖、不总结升华；不用工整的排比和三段式。\n"+
+      "  3. 唯一性：这句话换给别的角色也成立吗？成立就改成只有我才会说的样子，加一个具体的细节或态度。\n"+
+      "  4. 像真人发消息：短、口语、带一点不完美，符合 [Output Rhythm] 的条数，每条独立成行。\n"+
+      "想完后，在 </think> 之后只写要发出去的消息，严格遵守 [Output Rhythm]、[Language]、[Translation] 等格式要求。思考内容永远不要出现在消息里，也不要提到“思考”“检查”。";
   },
   // 引用回复
   quoting:function(){
