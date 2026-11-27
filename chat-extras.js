@@ -45,6 +45,7 @@ $("#actSheet").addEventListener("click",function(e){
 function bubbleCls(m){return m.type==="img"?" img":m.type==="stk"?" stk":m.type==="loc"?" loc":(m.type==="transfer"||m.type==="xack")?" xfer":m.type==="voice"?" voice":""}
 function bubbleHTML(m){
   if(m.type==="img"&&m.img)return '<img src="'+m.img+'">';
+  if(m.type==="img"&&m.by==="ai"){var failed=!m.gen||Date.now()-m.t>300000;return '<div class="genimg'+(failed?' fail':'')+'">'+(failed?"图片没能生成":"正在拍照…")+'</div>'}
   if(m.type==="stk"){var ssrc=stSrc(m);if(ssrc)return '<img src="'+ssrc+'">'}
   if(m.type==="voice")return voiceBubble(m);
   if(m.type==="loc")return '<div class="locc">'+mapSVG(m.addr||m.place)+'<div class="loci"><b>'+esc(m.place||m.addr)+'</b>'+(m.place&&m.addr?'<small>'+esc(m.addr)+'</small>':'')+'</div></div>';
@@ -339,7 +340,7 @@ function stBlob(key,u){
 function stSrc(m){if(m.sid){var r="",k="";SD.stickers.forEach(function(x){if(x.id===m.sid){r=x.img;k=x.id}});if(r)return stBlob(k,r)}return stBlob("m"+(m.id||""),m.img||"")}
 function qWho(q){if(q.by==="me")return P.name;var c=cget(CUR);return c?nick(c):"Char"}
 function qpack(m){return{id:m.id,by:m.by,text:String(m.text||"").replace(/\s+/g," ").trim().slice(0,80)}}
-function qtx(m){return(m.q&&m.by==="me"?'[Replying to '+qWho(m.q)+': "'+m.q.text+'"] ':'')+(m.type==="img"&&m.by==="me"&&!m.desc&&!m.q?PROMPTS.imageUnseen():(m.type==="img"&&m.desc?PROMPTS.imageNote(m.desc):m.text))}
+function qtx(m){return(m.q&&m.by==="me"?'[Replying to '+qWho(m.q)+': "'+m.q.text+'"] ':'')+(m.type==="img"&&m.by==="ai"?PROMPTS.imageSent(m.prompt||""):(m.type==="img"&&m.by==="me"&&!m.desc&&!m.q?PROMPTS.imageUnseen():(m.type==="img"&&m.desc?PROMPTS.imageNote(m.desc):m.text)))}
 function qHTML(m){
   if(!m.q||(m.type&&m.type!=="voice"))return '';
   return '<div class="qt" data-qid="'+m.q.id+'"><b>'+esc(qWho(m.q))+'</b><span>'+esc(m.q.text)+'</span></div>';
@@ -355,6 +356,12 @@ function startQuote(i){
 }
 function clearQuote(){PQ=null;var Q=$("#chQ");if(Q)Q.hidden=true}
 (function(){var _oc=openChat;openChat=function(id){clearQuote();_oc(id)}})();
+// Char 发的照片：先显示“正在拍照…”，生成好以后替换成图片
+function genChatImg(id,m){
+  genImage(m.prompt).then(function(u){m.img=u;delete m.gen})
+    .catch(function(e){m.gen=0;m.genFail=String(e.message||e).slice(0,80);toast("生图失败："+m.genFail,3500)})
+    .then(function(){saveChats();if(CUR===id&&!$("#pgChat").hidden)renderChat(true)});
+}
 function aiMsg(id,raw,i){
   var nm={id:Date.now().toString(36)+i,by:"ai",text:raw,t:Date.now()};
   if(chsGet(id).blocked)nm.blk=true;
@@ -364,6 +371,8 @@ function aiMsg(id,raw,i){
     for(var k=l.length-1;k>=0;k--){var x=l[k];if(x.by==="me"&&!x.type&&x.text&&x.text.toLowerCase().indexOf(key)>-1){nm.q=qpack(x);break}}
     if(rest){raw=rest;nm.text=rest}
   }
+  var im=raw.match(/^\[(?:image|img|photo|pic)\s*[:：]\s*([\s\S]{1,500}?)\]$/i);
+  if(im){nm.type="img";nm.img="";nm.gen=1;nm.prompt=im[1].trim();nm.text="[Image]";genChatImg(id,nm);return nm}
   var sm=raw.match(/^\[sticker:\s*([^\]]{1,40})\]$/i);
   if(sm){
     var nk=sm[1].trim().toLowerCase(),f=null;

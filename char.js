@@ -240,7 +240,7 @@ function phSheet(k){
 // ---------- Chat Settings (per Char) ----------
 // getChatSettings(id): 供内置功能读取这位 Char 的聊天设置
 var CHS={};try{CHS=JSON.parse(store("chatset")||"{}")}catch(e){}
-var CHD={mem:150,bg:false,bgMin:30,apOn:false,apMin:180,apAt:0,asOn:false,asMin:60,asAt:0,life:false,charTz:"",userTz:"",charRegion:"",userRegion:"",voice:false,voiceId:"",charLang:"",trLang:"",trOpen:false,aware:false,outMin:1,outMax:5,thoughts:false,wbOff:[],blocked:false,reactOn:true,vtMe:true,vtChar:true,chBg:"",cot:false,busyOn:false,arMode:"busy",ar:{busy:["","",""],focus:["","",""],sleep:["","",""]},emoFreq:"mid",voiceFreq:"low",ltm:false,ltmEvery:90,ltmCap:500,ltmAt:0};
+var CHD={mem:150,bg:false,bgMin:30,apOn:false,apMin:180,apAt:0,apImg:0,asOn:false,asMin:60,asAt:0,life:false,charTz:"",userTz:"",charRegion:"",userRegion:"",voice:false,voiceId:"",charLang:"",trLang:"",trOpen:false,aware:false,outMin:1,outMax:5,thoughts:false,wbOff:[],blocked:false,reactOn:true,vtMe:true,vtChar:true,chBg:"",cot:false,busyOn:false,arMode:"busy",ar:{busy:["","",""],focus:["","",""],sleep:["","",""]},emoFreq:"mid",voiceFreq:"low",imgOn:true,ltm:false,ltmEvery:90,ltmCap:500,ltmAt:0};
 function chsGet(id){var o=CHS[id]||(CHS[id]={});for(var k in CHD)if(o[k]===undefined)o[k]=(typeof CHD[k]==="object")?JSON.parse(JSON.stringify(CHD[k])):CHD[k];return o}
 function saveCHS(){try{localStorage.setItem("chatset",JSON.stringify(CHS));return true}catch(e){toast("存储空间不足");return false}}
 window.getChatSettings=function(id){return JSON.parse(JSON.stringify(chsGet(id)))};
@@ -260,6 +260,7 @@ function chsPrompt(id){
   if(o.emoFreq!=="off"&&SD.stickers.length){
     r.push(PROMPTS.stickers(SD.stickers.slice(0,PROMPTS.limits.stickerNames).map(function(x,ix){return stName(x,ix)}),o.emoFreq));
   }
+  if(o.imgOn!==false&&imgOk())r.push(PROMPTS.sendImage());
   if(o.life){
     var trl=getTrail(id);
     if(trl.items.length)r.push(PROMPTS.lifeTrail(trl));
@@ -352,7 +353,7 @@ function renderChSet(){
     '<div class="sgrp">Overview</div><div class="card"><div class="fl"><div class="srow"><b>Total messages</b><span class="v">'+total+'</span></div></div><div class="fl"><div class="srow"><b>Estimated tokens (this round)</b><span class="v">≈ '+estRound(c)+'</span></div><div class="hint">按当前设定的记忆深度估算：系统提示词 + 最近聊天记录，只含输入部分</div></div></div>'+
     '<div class="sgrp">Background Chat</div><div class="card">'+chT("bg","Message you on their own","开启后，Char 会在后台主动私发消息")+chI("bgMin","Interval (minutes)","30",{num:1})+'</div>'+
     '<div class="sgrp">Moments Interaction</div><div class="card">'+chT("reactOn","Like & comment on my moments","开启后，Char 会随机、不定时地给你的动态点赞、评论，也会回复你的评论。不是每条都会，也不会立刻，就像真人刷到了才互动")+'</div>'+
-    '<div class="sgrp">Auto Post</div><div class="card">'+chT("apOn","Post moments on their own","开启后，Char 隔一段时间会根据当前状态自己发一条动态：一两句话，像真人随手发的")+chI("apMin","Interval (minutes)","180",{num:1,sub:"计时按真实时间算：中途关掉 App 也不会重置，下次打开发现到点了就补发一条。App 关着的时候发不出来，想让它在后台也发，可以到 Settings 里打开 Keep Alive"})+'</div>'+
+    '<div class="sgrp">Auto Post</div><div class="card">'+chT("apOn","Post moments on their own","开启后，Char 隔一段时间会根据当前状态自己发一条动态：一两句话，像真人随手发的")+chI("apMin","Interval (minutes)","180",{num:1,sub:"计时按真实时间算：中途关掉 App 也不会重置，下次打开发现到点了就补发一条。App 关着的时候发不出来，想让它在后台也发，可以到 Settings 里打开 Keep Alive"})+chI("apImg","Image chance (%)","0",{num:1,sub:"发动态时附带一张生成图片的概率。0 = 从不；100 = 每条都配图。需要先在 Settings 里接好 Image Generation；生图失败时就只发文字"})+'</div>'+
     '<div class="sgrp">Auto Status</div><div class="card">'+chT("asOn","Set status on their own","开启后，Char 隔一段时间会自己更新一条限时状态：几个字，24 小时后消失")+chI("asMin","Interval (minutes)","60",{num:1,sub:"计时按真实时间算：中途关掉 App 也不会重置，下次打开发现到点了就补发一条。App 关着的时候发不出来，想让它在后台也发，可以到 Settings 里打开 Keep Alive"})+'</div>'+
     '<div class="sgrp">Life Trail</div><div class="card">'+chT("life","Life trail status","让 Char 拥有自己的生活轨迹和当前状态")+'</div>'+
     '<div class="sgrp">Time & Place</div><datalist id="tzList">'+tzs.map(function(z){return '<option value="'+z+'">'}).join("")+'</datalist><div class="card">'+
@@ -364,7 +365,7 @@ function renderChSet(){
     '<div class="sgrp">Reasoning</div><div class="card">'+chSeg("cot","Chain of thought","回复前先想一遍：对方的情绪、我此刻的感受、避免重复、不出戏、不像AI。Short 约 200 字，Long 约 600 字且检查更细；越长越慢、越费 tokens",[["off","Off"],["short","Short"],["long","Long"]],cotMode(chsGet(CUR)))+'</div>'+
     '<div class="sgrp">Auto Reply</div><div class="card">'+chT("busyOn","Auto-reply when busy","开启后，Char 会直接用下面的自定义回复应答，不再调用 AI")+'<div id="arBox">'+arHTML()+'</div></div>'+
     '<div class="sgrp">Output</div><div class="card"><div class="fl"><label>Messages per round</label><div class="rng"><input data-cf="outMin" type="number" inputmode="numeric" placeholder="min" value="'+o.outMin+'"><span>to</span><input data-cf="outMax" type="number" inputmode="numeric" placeholder="max" value="'+o.outMax+'"></div></div>'+
-      chSeg("emoFreq","Sticker frequency","只控制表情标签，不限制普通消息里的 emoji")+chSeg("voiceFreq","Voice frequency","需要先开启上面的 Voice generation")+chI("mem","Short-term memory (messages)","150",{num:1,sub:"Char 每次回复时能读到的最近聊天条数，默认 150"})+chT("thoughts","Inner thoughts each round","开启后，Char 每轮回复都会带一条心声，点聊天栏里的爱心查看。一轮刷一轮，想留下就收藏")+'</div>'+
+      chSeg("emoFreq","Sticker frequency","只控制表情标签，不限制普通消息里的 emoji")+chSeg("voiceFreq","Voice frequency","需要先开启上面的 Voice generation")+chT("imgOn","Send photos","开启后，你让 Char 发照片（比如“发张你现在的照片”），它会用 Image Generation 生成一张发给你。需要先在 Settings 里接好生图 API；每张图会多花一次生图请求")+chI("mem","Short-term memory (messages)","150",{num:1,sub:"Char 每次回复时能读到的最近聊天条数，默认 150"})+chT("thoughts","Inner thoughts each round","开启后，Char 每轮回复都会带一条心声，点聊天栏里的爱心查看。一轮刷一轮，想留下就收藏")+'</div>'+
     '<div class="sgrp">World Book</div><div class="card">'+(wb||'<div class="empty" style="margin:6px 0">还没有世界书条目</div>')+'</div><div class="hint">开关表示这条设定是否挂载给这位 Char。Local 条目会加入或移出它的角色列表</div>'+
     '<div class="sgrp">Long-term Memory</div><div class="card">'+chT("ltm","Long-term memory","开启后，聊天累计到设定条数会自动总结成核心记忆，存进 Memory 页")+chI("ltmEvery","Trigger every (messages)","90",{num:1,sub:"每累计这么多条新消息，就总结一次，默认 90"})+chI("ltmCap","Core memory limit (characters)","500",{num:1,sub:"每次总结的字数上限，默认 500"})+'<div class="fl"><div class="srow"><b>Not summarized yet</b><span class="v">'+Math.max(0,total-Math.min(o.ltmAt||0,total))+' messages</span></div><button class="pillbtn" data-ca="sumnow" style="margin-top:12px">Summarize now</button><button class="pillbtn" data-ca="sumredo" style="margin-top:8px">Re-summarize last '+(Math.max(1,parseInt(o.ltmEvery)||90))+' messages</button><div class="hint">手动总结自上次总结以来的新聊天。删掉最新一条总结时进度会自动回退；也可以点第二个按钮，把最近这么多条重新标成未总结，再点 Summarize now</div></div></div>'+
     '<div class="sgrp">Chat Background</div><div class="card"><div class="fl"><button class="tile wide" data-ca="bgpick" style="width:100%">'+I.photo+'<span class="tx"><b>Choose image</b><small>'+(o.chBg?"已设置":"未设置，使用默认背景")+'</small></span></button>'+(o.chBg?'<button class="pillbtn" data-ca="bgrm" style="margin-top:10px">Remove background</button>':'')+'</div></div>'+
@@ -404,7 +405,7 @@ $("#pgChset").oninput=function(e){
   var o=chsGet(CUR),v=e.target.value;
   if(f==="charTz"||f==="userTz"){o[f]=v.trim();var n=$("#tzn_"+f);if(n)n.textContent=tzOk(o[f]||undefined)?tzNow(o[f]):"";saveCHS();return}
   if(e.target.type==="number"){var n2=parseInt(v,10);if(isNaN(n2))return;
-    var lim={ltmEvery:[10,1000],ltmCap:[50,3000],mem:[2,1000],bgMin:[1,1440],apMin:[1,10080],asMin:[1,10080],outMin:[1,20],outMax:[1,20]}[f]||[1,9999];
+    var lim={ltmEvery:[10,1000],ltmCap:[50,3000],mem:[2,1000],bgMin:[1,1440],apMin:[1,10080],apImg:[0,100],asMin:[1,10080],outMin:[1,20],outMax:[1,20]}[f]||[1,9999];
     o[f]=Math.max(lim[0],Math.min(lim[1],n2));saveCHS();return}
   o[f]=v.trim();saveCHS();
 };
@@ -459,8 +460,23 @@ function autoClean(t,cut){
   t=t.split(/\s*(?:\|\|\||｜｜｜)\s*/)[0].trim().replace(/^["“「『]+|["”」』]+$/g,"").trim();
   return t.slice(0,cut);
 }
+// 调一次聊天模型，拿一段文字
+function autoLLM(sys,ask,demoText){
+  var a=S.api;
+  if((a.base||"").trim().toLowerCase()==="demo")return new Promise(function(r){setTimeout(function(){r(demoText)},600)});
+  return fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.9,max_tokens:600,messages:[{role:"system",content:sys},{role:"user",content:ask}]})})
+    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
+    .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("空回复");return String(t)});
+}
+// 给动态配图：先让聊天模型根据动态文字写一句生图描述，再去生图
+function autoImage(c,sys,text){
+  return autoLLM(sys,PROMPTS.autoPostImage(nick(c),text),"a cozy desk with a cup of coffee, soft morning light").then(function(p){
+    p=autoClean(p,400);if(!p)throw new Error("空描述");
+    return genImage(p);
+  });
+}
 function autoRun(c,kind){
-  var o=chsGet(c.id),L=PROMPTS.limits,a=S.api,demo=(a.base||"").trim().toLowerCase()==="demo";
+  var o=chsGet(c.id),L=PROMPTS.limits;
   var lang=o.charLang||"the language this character normally uses",sys="",ask,cut;
   try{sys=buildSystem(c,msgs(c.id).slice(-8))}catch(e){}
   if(kind==="post"){
@@ -469,18 +485,17 @@ function autoRun(c,kind){
   }else{
     var cur=getStatus(c.id);ask=PROMPTS.autoStatus(nick(c),lang,cur&&cur.text);cut=L.autoStatusCut;
   }
-  var job=demo?new Promise(function(r){setTimeout(function(){r(kind==="post"?"（演示）今天也要加油":"（演示）发呆中")},600)}):
-    fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify({model:a.model,temperature:0.9,max_tokens:600,messages:[{role:"system",content:sys},{role:"user",content:ask}]})})
-    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));return j})})
-    .then(function(j){var t=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!t)throw new Error("空回复");return String(t)});
-  return job.then(function(t){
+  return autoLLM(sys,ask,kind==="post"?"（演示）今天也要加油":"（演示）发呆中").then(function(t){
     t=autoClean(t,cut);if(!t)throw new Error("空回复");
-    if(kind==="post"){
-      posts.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,4),by:c.id,text:t,imgs:[],loc:"",mention:[],hide:[],vis:"Friends",t:Date.now(),likes:[],cmts:[]});
+    if(kind!=="post"){setStatus(c.id,t);return true}
+    var pct=Math.max(0,Math.min(100,parseFloat(o.apImg)||0));
+    var want=pct>0&&imgOk()&&Math.random()*100<pct;
+    return (want?autoImage(c,sys,t).catch(function(){return null}):Promise.resolve(null)).then(function(img){
+      posts.unshift({id:Date.now().toString(36)+Math.random().toString(36).slice(2,4),by:c.id,text:t,imgs:img?[img]:[],loc:"",mention:[],hide:[],vis:"Friends",t:Date.now(),likes:[],cmts:[]});
       if(!savePosts()){posts.shift();throw new Error("存储空间不足")}
       var pg=$("#pgProfile");if(pg&&!pg.hidden&&typeof PVid!=="undefined"&&PVid===c.id)renderProfile();
-    }else setStatus(c.id,t);
-    return true;
+      return true;
+    });
   });
 }
 function autoTick(){

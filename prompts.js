@@ -23,7 +23,9 @@ window.PROMPTS={
     replyCut:50,                 // Char 回复评论最多几个字
     memImportantTypes:["重要"],  // 这些类型的记忆「每次聊天都会带上」（不会被挤掉）
     memImportantMax:40,          // 上面这类最多带几条（取日期最新的）
-    memRecent:60,                // 其他类型的记忆，每次带最近几条（按记忆上的日期排）
+    memSummaryTypes:["Summary"], // 自动总结出来的记忆类型，单独占一份名额，不和别的类型抢
+    memSummaryMax:20,            // 自动总结每次带最近几条（取日期最新的）
+    memRecent:40,                // 其余类型（日常、约定、喜好等）每次带最近几条（按记忆上的日期排）
     memChars:300,                // 手动写的记忆，每条最多带多少字（自动总结出来的 Summary 不受这个限制，字数按 Chat Settings 里的上限）
     wbLookback:6,                // 世界书：看最近几条消息来判断关键词有没有触发
     wbChars:{light:300,medium:600,deep:1500}, // 世界书：轻 / 中 / 深度各自最多带多少字
@@ -38,6 +40,9 @@ window.PROMPTS={
     visionSide:768,              // 发给识图模型前，把图片缩到最长边多少像素（太大有些中转站会直接丢掉图片）
     visionRefuse:/please (upload|provide|send|attach)|upload the image|no image|(can'?not|can't|unable to) (see|view|access)|do(n't| not) see any|没有(看到|收到).{0,6}图|无法(看到|查看|识别)|请(上传|提供|发送)/i, // 识图模型的回复如果像这样，说明它根本没看到图，不当作描述
     cotMinTokens:{short:2048,long:4096}, // 开了思维链后，回复的字数上限（max tokens）至少要这么多，否则思考没写完就被截断，真正的回复发不出来
+    chatImgMax:1,                // 聊天里 Char 一次回复最多发几张生成的图
+    genImgSide:900,              // 生成的图片存下来前，缩到最长边多少像素（原图太大会撑爆存储）
+    genImgQuality:0.82,          // 存下来的图片压缩质量（0 到 1）
     visionLang:"中文",           // 图片描述用什么语言写
     summaryLang:"中文",          // 记忆自动总结用什么语言写
     summaryGapMin:60             // 聊天里两条消息隔了超过这么多分钟（或跨天），总结时就当成新的一段，只在段首写一次时间
@@ -221,6 +226,10 @@ window.PROMPTS={
       (recent&&recent.length?"Do not repeat or closely paraphrase these recent posts: "+recent.join(" | ")+". ":"")+
       "Write it in "+lang+". Output ONLY the post text, nothing else.";
   },
+  // Char 发动态时配的图：根据这条动态的文字，写出一句给生图模型的英文描述
+  autoPostImage:function(name,text){
+    return "Write ONE text-to-image prompt (in English, under 40 words) for a photo that goes with this social media post by "+name+": \""+text+"\". It must look like a casual photo a real person would snap with a phone and post: a concrete scene or object such as food, a street, a desk, the sky, a pet, a view from where they are. Base it on "+name+"'s current situation. Do not show anyone's face. No text, captions, logos or watermarks in the image. Output ONLY the prompt, nothing else.";
+  },
   // Char 自己发状态：current 是它现在的状态文字（要求写一条不一样的）
   autoStatus:function(name,lang,current){
     var L=PROMPTS.limits;
@@ -236,6 +245,12 @@ window.PROMPTS={
   imageNote:function(desc){return "[The user sent an image. What it shows: "+desc+"]"},
   // 没能识别出图片内容时
   imageUnseen:function(){return "[The user sent an image, but you cannot see what is in it. If it matters, say honestly that you cannot see it; never pretend to.]"},
+  // 聊天里让 Char 能发照片：只有接好 Image Generation 并开着 Send photos 时才会带上
+  sendImage:function(){
+    return "[Sending Photos]\n- You can send a photo as its own message by writing only [image: a short, concrete description of the photo, in English]. The photo is generated from that description.\n- Use it when the user asks you to send or show a photo or picture (what you are eating, your view, your room, a pet, a selfie...), or when it genuinely fits the moment. Most replies should not contain one, and never send more than one per reply.\n- The description must be something a phone camera could capture: the scene, objects, light and mood. If a person appears, describe them consistently with your character description. Never include text, captions or watermarks, and never mention that the photo is generated.";
+  },
+  // 记录 Char 自己发过的照片，让它记得发过什么
+  imageSent:function(prompt){return "[You sent the user a photo: "+prompt+"]"},
   // 点气泡翻译
   translate:function(lang){
     return "Translate the user's message into "+lang+". Output only the translation, with no explanations or quotation marks.";

@@ -99,14 +99,14 @@ function openChat(id){
 }
 
 // ---- 调用 AI ----
-// 选出要放进提示词的记忆：「重要」类型每次都带；其他类型带最近的几条（数量见 prompts.js 的 limits）
+// 选出要放进提示词的记忆：「重要」类型每次都带；自动总结（Summary）单独带最近的几条；其余类型带最近的几条（数量见 prompts.js 的 limits）
 function pickMemories(list){
   var L=PROMPTS.limits,key=function(m){return(m.date||"")+"|"+("000000000000"+(m.t||0)).slice(-13)};
-  var imp=[],rest=[];
-  list.forEach(function(m){(L.memImportantTypes.indexOf(m.type)>-1?imp:rest).push(m)});
+  var imp=[],sum=[],rest=[];
+  list.forEach(function(m){(L.memImportantTypes.indexOf(m.type)>-1?imp:L.memSummaryTypes.indexOf(m.type)>-1?sum:rest).push(m)});
   var newer=function(a,b){return key(a)<key(b)?1:key(a)>key(b)?-1:0};
-  imp.sort(newer);rest.sort(newer);
-  return imp.slice(0,L.memImportantMax).concat(rest.slice(0,L.memRecent)).sort(function(a,b){return -newer(a,b)});
+  imp.sort(newer);sum.sort(newer);rest.sort(newer);
+  return imp.slice(0,L.memImportantMax).concat(sum.slice(0,L.memSummaryMax),rest.slice(0,L.memRecent)).sort(function(a,b){return -newer(a,b)});
 }
 function buildSystem(c,list){
   var s=window.buildSystemPrompt(c.id),ex=[];
@@ -222,6 +222,9 @@ function getReply(){
     var hasX=msgs(id).some(function(m){return m.by==="me"&&m.type==="transfer"&&!m.st}),dec=null,rb="b"+Date.now().toString(36);
     if(hasX)parts=parts.map(function(x){var mm=x.match(/\[(accept|return)\]/i);if(mm){dec=mm[1].toLowerCase();x=x.replace(/\s*\[(accept|return)\]\s*/ig," ").trim()}return x}).filter(Boolean);
     var capN=Math.max(1,chsGet(id).outMin,chsGet(id).outMax);if(parts.length>capN)parts=parts.slice(0,capN); // 保险：AI 超过上限时，多出来的不发
+    // 发图标签：没开 Send photos、没接生图 API，或者一次回复里超过上限的，直接去掉
+    var imgOkNow=chsGet(id).imgOn!==false&&imgOk(),imgN=0;
+    parts=parts.filter(function(x){if(!/^\[(?:image|img|photo|pic)\s*[:：]/i.test(x))return true;if(!imgOkNow||imgN>=PROMPTS.limits.chatImgMax)return false;imgN++;return true});
     if(!parts.length&&notes.length){
       busy=false;PACT[id]=null;
       if(PTH[id]){THT[id]={text:PTH[id],t:Date.now(),saved:false,seen:false};delete PTH[id];saveTHT()}

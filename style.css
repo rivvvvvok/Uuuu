@@ -749,3 +749,8 @@ input[type="date"],input[type="time"]{-webkit-appearance:none;appearance:none;di
 .nbanner.show{opacity:1;visibility:visible;pointer-events:auto;transition:transform .35s cubic-bezier(.2,.9,.3,1.1),opacity .2s,visibility 0s}
 /* 多选时，系统提示也能被选中 */
 .sysmsg.sel{outline:2px solid var(--text);outline-offset:2px}
+
+/* Char 发的照片：生成中 / 失败的占位 */
+.genimg{width:200px;height:200px;max-width:100%;border-radius:20px;background:var(--fill);color:var(--sub);display:grid;place-items:center;font-size:13px;font-weight:700;text-align:center;padding:12px;box-sizing:border-box}
+.genimg:not(.fail){animation:genpulse 1.4s ease-in-out infinite}
+@keyframes genpulse{0%,100%{opacity:1}50%{opacity:.55}}

@@ -171,6 +171,49 @@ function fillUsage(){
   $("#usHint").textContent=pct>=80?"文字数据快满了：新内容可能存不进去，请先导出备份，再清理不需要的聊天记录。":(IMG.isOk()?"图片会自动存到单独的存储区，不占上面的文字空间。":"这台设备的浏览器不允许单独存图片，图片仍然占用上面的文字空间。");
   if(navigator.storage&&navigator.storage.estimate)navigator.storage.estimate().then(function(e){var el=$("#usAll");if(el)el.textContent=mb(e.usage||0)+(e.quota?" / "+mb(e.quota):"")}).catch(function(){});
 }
+// ---------- 生图 ----------
+// genImage(描述) -> Promise<图片 dataURL>。用的是 OpenAI 格式的 /images/generations 接口；
+// 正向提示词会加在描述前面，反向提示词会写成 “Avoid: ...” 加在描述后面（这样不支持反向提示词的接口也能用）
+function imgOk(){var a=S.img;return !!(a.base&&((a.base||"").trim().toLowerCase()==="demo"||(a.key&&a.model)))}
+function blobToDataURL(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result)};r.onerror=rej;r.readAsDataURL(b)})}
+function compressImg(url,side,q){
+  return new Promise(function(res){
+    var im=new Image();
+    im.onload=function(){
+      try{
+        var s=Math.min(1,side/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(im.width*s));c.height=Math.max(1,Math.round(im.height*s));
+        var x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);res(c.toDataURL("image/jpeg",q));
+      }catch(e){res(url)}
+    };
+    im.onerror=function(){res(url)};im.src=url;
+  });
+}
+function genImage(prompt){
+  var a=S.img,L=PROMPTS.limits;
+  if(!imgOk())return Promise.reject(new Error("请先在 Settings 里填写 Image Generation 的 Base URL、API Key 和 Model"));
+  if((a.base||"").trim().toLowerCase()==="demo"){
+    var c=document.createElement("canvas");c.width=c.height=320;var x=c.getContext("2d"),g=x.createLinearGradient(0,0,320,320);g.addColorStop(0,"#d9d9d9");g.addColorStop(1,"#8a8a8a");x.fillStyle=g;x.fillRect(0,0,320,320);
+    return new Promise(function(r){setTimeout(function(){r(c.toDataURL("image/jpeg",.8))},800)});
+  }
+  var pos=(a.pos||"").trim(),neg=(a.neg||"").trim(),full=(pos?pos+", ":"")+prompt+(neg?". Avoid: "+neg:"");
+  var body={model:a.model,prompt:full,n:1,size:(a.size||"1024x1024").trim()};
+  return fetch(apiUrl(a,"/images/generations"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&(j.error.message||j.error))||("HTTP "+r.status));return j})})
+    .then(function(j){
+      var d=j.data&&j.data[0];if(!d)throw new Error("生图接口没有返回图片");
+      if(d.b64_json)return "data:image/png;base64,"+d.b64_json;
+      if(d.url)return fetch(d.url).then(function(r){return r.blob()}).then(blobToDataURL).catch(function(){return d.url});
+      throw new Error("生图接口返回的格式不认识");
+    })
+    .then(function(u){return compressImg(u,L.genImgSide,L.genImgQuality)});
+}
+function testImg(){
+  var out=$("#imgOut");if(!out)return;
+  out.textContent="生成中…（可能要几十秒）";
+  genImage("a small red apple on a white table, soft daylight, simple photo").then(function(u){
+    out.innerHTML='生成成功：<img src="'+u+'" style="display:block;width:140px;border-radius:16px;margin-top:8px">';
+  }).catch(function(e){out.textContent="失败："+String(e.message||e).slice(0,180)});
+}
 function renderSettings(){
   var th=S.theme==="system"?"System":S.theme==="light"?"Light":"Dark";
   $("#pgSet").innerHTML=
@@ -179,7 +222,7 @@ function renderSettings(){
    wbSetHTML()+ntSetHTML()+kaSetHTML()+'<div class="sgrp">Chat API</div><div class="card">'+fld("api.base","Base URL","https://api.openai.com/v1")+fld("api.key","API Key","sk-…",{secret:1})+fld("api.model","Model","模型名，例如 gpt-4o")+fld("api.temp","Temperature","0.8",{num:"0.1"})+fld("api.max","Max Tokens","1024",{num:"1"})+fld("api.ctx","Recent Messages","发送给 AI 的最近消息条数，默认 30",{num:"1"})+'</div>'+pullBlock("api","Fetch models")+
    '<button class="pillbtn" id="testBtn">Test connection</button><div class="hint" id="testOut">兼容 OpenAI 格式的接口都可以填，Base URL 一般以 /v1 结尾。<br>只想先看效果的话，Base URL 填 demo，聊天里会返回演示回复。</div>'+
    '<div class="sgrp">Voice · ElevenLabs</div><div class="card">'+fld("voice.key","API Key","xi-…",{secret:1})+fld("voice.voice","Voice ID","音色 ID")+fld("voice.model","Model ID","eleven_multilingual_v2")+'</div>'+pullBlock("voice","Fetch voices")+
-   '<div class="sgrp">Image Generation</div><div class="card">'+fld("img.base","Base URL","https://api.openai.com/v1")+fld("img.key","API Key","sk-…",{secret:1})+fld("img.model","Model","模型名")+fld("img.size","Size","1024x1024")+fld("img.pos","Positive Prompt","正向提示词，会附加在每次生图描述的前面",{area:1})+fld("img.neg","Negative Prompt","反向提示词，描述不想出现的内容",{area:1})+'</div>'+pullBlock("img","Fetch models")+'<div class="hint">不是所有生图接口都支持反向提示词，不支持时填了可能不生效。</div>'+
+   '<div class="sgrp">Image Generation</div><div class="card">'+fld("img.base","Base URL","https://api.openai.com/v1")+fld("img.key","API Key","sk-…",{secret:1})+fld("img.model","Model","模型名")+fld("img.size","Size","1024x1024")+fld("img.pos","Positive Prompt","正向提示词，会附加在每次生图描述的前面",{area:1})+fld("img.neg","Negative Prompt","反向提示词，描述不想出现的内容",{area:1})+'</div>'+pullBlock("img","Fetch models")+'<div class="hint">不是所有生图接口都支持反向提示词，不支持时填了可能不生效。</div>'+'<button class="pillbtn" id="imgTestBtn">Test generation</button><div class="hint" id="imgOut"></div>'+
    '<div class="sgrp">Image Recognition</div><div class="card">'+fld("vision.base","Base URL","https://api.openai.com/v1")+fld("vision.key","API Key","sk-…",{secret:1})+fld("vision.model","Model","支持识图的模型，例如 gpt-4o")+fld("vision.frames","Video Frames","视频截取几张画面（1-12，默认 6）",{num:"1"})+'</div>'+pullBlock("vision","Fetch models")+'<button class="pillbtn" id="visTestBtn">Test connection</button><button class="pillbtn" id="vidTestBtn">Test with a video</button><div class="hint" id="visOut">识图专用，和上面的 Chat API 是分开的两组。测试会发送一张小图片，请选用支持识图的模型。<br>视频识别不需要单独的接口：会在手机上把视频均匀截成几张画面，交给这组识图接口一起看（听不到视频里的声音）。</div>'+
    '<div class="sgrp">Speech Recognition</div><div class="card">'+fld("stt.base","Base URL","https://api.openai.com/v1")+fld("stt.key","API Key","sk-…",{secret:1})+fld("stt.model","Model","whisper-1")+fld("stt.lang","Language","可选，例如 zh、en，留空自动判断")+'</div>'+pullBlock("stt","Fetch models")+'<button class="pillbtn" id="sttTestBtn">Test: record and transcribe</button><div class="hint" id="sttOut">用来识别你说的话。走标准的 /audio/transcriptions 接口（OpenAI Whisper 格式），请选用支持语音转文字的模型；如果你的中转站不支持，测试会提示失败。</div>'+
    '<div class="sgrp">Data</div><div class="card"><button class="srow" id="keysBtn"><b>Include API keys in backup</b><i class="sw" id="swKeys"></i></button></div>'+
@@ -252,6 +295,7 @@ $("#pgSet").onclick=function(e){
   if(b.id==="themeBtn"){S.theme=S.theme==="system"?"light":S.theme==="light"?"dark":"system";saveS();applyTheme();return renderSettings()}
   if(b.id==="keysBtn")return $("#swKeys").classList.toggle("on");
   if(b.id==="testBtn")return testApi();
+  if(b.id==="imgTestBtn")return testImg();
   if(b.id==="visTestBtn")return testVision();
   if(b.id==="vidTestBtn")return testVideo();
   if(b.id==="sttTestBtn")return testStt();
