@@ -35,6 +35,8 @@ window.PROMPTS={
     autoStatusMax:15,            // Char 自己发的状态：要求 AI 写多少字以内（限时状态，更短）
     autoPostCut:120,             // 动态硬上限：AI 写太长时，超过这个字数直接截断
     autoStatusCut:30,            // 状态硬上限
+    gapNoteMinMin:120,           // 距离上一条消息超过多少分钟，才在提示词里告诉 Char“已经过了多久”
+    gapMarkHours:3,              // 聊天记录里，相邻两条消息隔了几小时以上，就在后一条前面标一个“过了多久”
     visionMax:4,                 // 一次回复前，最多现场识别几张还没识别过的图片（取最新的）
     visionCut:200,               // 每张图的描述最多保留多少字（同时也会写进给识图模型的要求里）
     visionSide:768,              // 发给识图模型前，把图片缩到最长边多少像素（太大有些中转站会直接丢掉图片）
@@ -80,6 +82,20 @@ window.PROMPTS={
   },
   // 情侣空间：在一起的天数
   coupleDays:function(days){return "[Relationship days]\nDays counted with the user: "+days},
+  // 把一段毫秒数写成易读的英文：2 days 3 hours / 5 hours 20 minutes / 40 minutes
+  human:function(ms){
+    var m=Math.max(1,Math.round(ms/60000)),d=Math.floor(m/1440),h=Math.floor(m%1440/60),n=m%60,o=[];
+    if(d)o.push(d+" day"+(d>1?"s":""));
+    if(h&&d<7)o.push(h+" hour"+(h>1?"s":""));
+    if(n&&!d)o.push(n+" minute"+(n>1?"s":""));
+    return o.join(" ")||"a moment";
+  },
+  // 时间间隔感知：距离聊天里上一条消息过了多久。太短就不提
+  gapNote:function(ms,sinceT){
+    if(!(ms>=PROMPTS.limits.gapNoteMinMin*60000))return "";
+    return "[Time Gap]\n- It has been "+PROMPTS.human(ms)+" since the previous message in this chat (that was at "+new Date(sinceT).toLocaleString()+").\n- Be aware that real time has passed: the user may have been busy, asleep or away, and things may have changed in your own day too. Let it quietly shape how you greet and react. Only mention the gap if it is natural for your character; never complain about it or make a point of it unless it truly fits.\n- In the chat history, lines like [⏱ 2 days later] only mark time gaps. Never write such markers yourself.";
+  },
+  gapMark:function(ms){return "[⏱ "+PROMPTS.human(ms)+" later]"},
   // 当前时间
   now:function(){return "[Now]\n"+new Date().toLocaleString()},
 

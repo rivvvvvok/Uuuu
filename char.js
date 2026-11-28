@@ -455,7 +455,7 @@ $("#pgChset").onchange=function(e){
 var AUTO={busy:false};
 function autoApiOk(){var a=S.api;return (a.base||"").trim().toLowerCase()==="demo"||!!(a.base&&a.key&&a.model)}
 function autoClean(t,cut){
-  t=String(t||"").replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").replace(/\[thought:[\s\S]*?\]/ig,"");
+  t=String(t||"").replace(/\[⏱[^\]]*\]\s*/g,"").replace(/<think>[\s\S]*?(<\/think>|$)/gi,"").replace(/\[thought:[\s\S]*?\]/ig,"");
   t=t.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean)[0]||"";
   t=t.split(/\s*(?:\|\|\||｜｜｜)\s*/)[0].trim().replace(/^["“「『]+|["”」』]+$/g,"").trim();
   return t.slice(0,cut);

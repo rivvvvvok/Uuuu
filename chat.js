@@ -108,6 +108,13 @@ function pickMemories(list){
   imp.sort(newer);sum.sort(newer);rest.sort(newer);
   return imp.slice(0,L.memImportantMax).concat(sum.slice(0,L.memSummaryMax),rest.slice(0,L.memRecent)).sort(function(a,b){return -newer(a,b)});
 }
+// 距离上一条消息过了多久：用户刚发了新消息，就是“新消息和上一条之间”隔了多久；否则（比如 Char 自己发动态时）是“上一条到现在”
+function gapInfo(list){
+  var real=list.filter(function(m){return m.by!=="sys"}),a=real[real.length-1],b=real[real.length-2],now=Date.now();
+  if(!a)return null;
+  if(b&&Math.abs(now-a.t)<10*60000)return{ms:a.t-b.t,since:b.t};
+  return{ms:now-a.t,since:a.t};
+}
 function buildSystem(c,list){
   var s=window.buildSystemPrompt(c.id),ex=[];
   try{var mm=pickMemories(getMemories(c.id));if(mm.length)ex.push(PROMPTS.memories(mm))}catch(e){}
@@ -117,6 +124,7 @@ function buildSystem(c,list){
   try{var cp=getCouple(c.id);if(cp&&cp.days!=null)ex.push(PROMPTS.coupleDays(cp.days))}catch(e){}
   try{chsPrompt(c.id).forEach(function(x){ex.push(x)})}catch(e){}
   ex.push(PROMPTS.now());
+  try{var gi=gapInfo(list),gx=gi&&PROMPTS.gapNote(gi.ms,gi.since);if(gx)ex.push(gx)}catch(e){}
   ex.push((window.CONFIG&&CONFIG.prompts&&CONFIG.prompts.style)||PROMPTS.style);
   return s+"\n\n"+ex.join("\n\n");
 }
@@ -125,7 +133,8 @@ function callAI(c,list){
   if((a.base||"").trim().toLowerCase()==="demo")return new Promise(function(r){setTimeout(function(){r("好呀\n这是演示模式的回复\n到 Settings 里填真实的 API，就能和我正式聊天了")},1200)});
   if(!a.base||!a.key||!a.model)return Promise.reject(new Error("请先在 Settings 里填写 Chat API"));
   var n=Math.max(2,parseInt(chsGet(c.id).mem)||parseInt(a.ctx)||30),hist=[],tp=parseFloat(a.temp);if(isNaN(tp))tp=0.8;
-  list.slice(-n).forEach(function(m){if(m.by==="sys")return;var role=m.by==="me"?"user":"assistant",l=hist[hist.length-1];if(l&&l.role===role)l.content+="\n"+qtx(m);else hist.push({role:role,content:qtx(m)})});
+  var pT=0,gM=(PROMPTS.limits.gapMarkHours||0)*3600000;
+  list.slice(-n).forEach(function(m){if(m.by==="sys")return;var role=m.by==="me"?"user":"assistant",l=hist[hist.length-1],mk=(pT&&gM&&m.t-pT>=gM)?PROMPTS.gapMark(m.t-pT)+"\n":"";pT=m.t;if(l&&l.role===role)l.content+="\n"+mk+qtx(m);else hist.push({role:role,content:mk+qtx(m)})});
   var mt=parseInt(a.max)||1024,minT=PROMPTS.limits.cotMinTokens[cotMode(chsGet(c.id))];if(minT&&mt<minT)mt=minT; // 开了思维链就自动把字数上限拉高，免得思考没写完被截断
   var body={model:a.model,messages:[{role:"system",content:buildSystem(c,list)}].concat(hist),temperature:tp,max_tokens:mt};
   return fetch(apiUrl(a,"/chat/completions"),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+a.key},body:JSON.stringify(body)})
@@ -218,7 +227,7 @@ function getReply(){
     text=text.replace(/\[repost:\s*#?([\w-]+)\s*\]([^\n\[]*)/ig,function(_,pid,cm){if(acts.length<2)acts.push({k:"repost",pid:pid,text:(cm||"").trim()});return "\n"});
     var notes=[];acts.forEach(function(a){var n="";try{n=chatPostAct(c,a)}catch(e){}if(n)notes.push(n)});
     PACT[id]=notes.length?notes:null;
-    var parts=text.split(/\n+/).map(function(x){return x.trim()}).filter(Boolean);
+    var parts=text.split(/\n+/).map(function(x){return x.replace(/^\s*\[⏱[^\]]*\]\s*/,"").trim()}).filter(Boolean);
     var hasX=msgs(id).some(function(m){return m.by==="me"&&m.type==="transfer"&&!m.st}),dec=null,rb="b"+Date.now().toString(36);
     if(hasX)parts=parts.map(function(x){var mm=x.match(/\[(accept|return)\]/i);if(mm){dec=mm[1].toLowerCase();x=x.replace(/\s*\[(accept|return)\]\s*/ig," ").trim()}return x}).filter(Boolean);
     var capN=Math.max(1,chsGet(id).outMin,chsGet(id).outMax);if(parts.length>capN)parts=parts.slice(0,capN); // 保险：AI 超过上限时，多出来的不发
